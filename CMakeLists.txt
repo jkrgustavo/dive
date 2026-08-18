@@ -19,7 +19,8 @@ target_link_libraries(sokol PUBLIC
     "-framework QuartzCore"
     "-framework Metal")
 
-add_executable(dive src/main.c)
+file(GLOB DIVE_SOURCES CONFIGURE_DEPENDS "src/*.c")
+add_executable(dive ${DIVE_SOURCES})
 target_compile_options(dive PRIVATE 
     -Wall -Wextra
     $<$<CONFIG:Debug>:-fsanitize=address,undefined -fno-omit-frame-pointer>)
