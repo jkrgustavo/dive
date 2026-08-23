@@ -5,7 +5,7 @@
 #include "math.h"
 #include "input.h"
 
-#define CHUNK_COUNT 4
+#define CHUNK_COUNT 1
 
 void movement_window();
 void player_update_game_state(const struct Input *input);
@@ -33,7 +33,7 @@ static void init() {
         struct Chunk *cx = &state.chunks[c];
         chunk_alloc(cx);
         chunk_init(cx, simd_make_int3((c/2),  -1, (c%2)));
-        memset(cx->data, 1, sizeof(u8) * CHUNK_VOLUME);
+        memset(cx->data, 1, sizeof(u8) * CHUNK_VOLUME/2);
         chunk_mesh(cx);
     }
 
@@ -55,8 +55,9 @@ static void frame() {
     movement_window();
 
     renderer_begin_pass(&state.renderer);
+    simd_float4x4 proj_view = simd_mul(state.camera.proj, state.camera.view);
     for (int i = 0; i < CHUNK_COUNT; i++) {
-        chunk_render(&state.chunks[i], &state.camera);
+        chunk_render(&state.chunks[i], proj_view, state.camera.pos);
     }
     renderer_end_pass();
 
@@ -92,8 +93,11 @@ sapp_desc sokol_main(int argc, char* argv[]) {
 
 void movement_window() {
     float3 forward = derive_forward(state.camera.pitch, state.camera.yaw);
+    double3 pos = state.camera.pos;
     igBegin("Mouse direction", 0, 0);
     igText("Mouse forward: (%f, %f, %f)", forward.x, forward.y, forward.z);
+    igSpacing();
+    igText("Camera pos: (%f, %f, %f)", pos.x, pos.y, pos.z);
     igEnd();
 }
 

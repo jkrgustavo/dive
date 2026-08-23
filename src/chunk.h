@@ -17,9 +17,9 @@
  * Chunk dimensions must *always* be a power of 2
  * */
 
-#define CHUNK_DIMENSION_X 4
-#define CHUNK_DIMENSION_Y 4
-#define CHUNK_DIMENSION_Z 4
+#define CHUNK_DIMENSION_X 32
+#define CHUNK_DIMENSION_Y 32
+#define CHUNK_DIMENSION_Z 32
 
 #define CHUNK_MASK simd_make_int3(CHUNK_DIMENSION_X-1, CHUNK_DIMENSION_Y-1, CHUNK_DIMENSION_Z-1)
 #define CHUNK_SHIFT simd_make_int3(__builtin_ctz(CHUNK_DIMENSION_X), __builtin_ctz(CHUNK_DIMENSION_Y), __builtin_ctz(CHUNK_DIMENSION_Z))
@@ -47,7 +47,7 @@ static inline size_t local_to_index(int3 chunk_pos) {
 // index into chunk data -> pos within a chunk
 static inline int3 index_to_local(size_t idx) {
     return simd_make_int3(
-        (int)(idx & (CHUNK_DIMENSION_X - 1)),
+        (int)(idx & (CHUNK_MASK.x)),
         (int)((idx >> CHUNK_SHIFT.x) & CHUNK_MASK.y),
         (int)(idx >> (CHUNK_SHIFT.x + CHUNK_SHIFT.y))
     );
@@ -65,10 +65,8 @@ enum VoxelType {
 };
 
 struct MeshBuffer {
-    float3 *vertices;
     u32 vertex_count;
 
-    u16 *indices;
     u32 index_count;
 
     sg_buffer vbuf;
@@ -98,7 +96,7 @@ struct Chunk {
 void chunk_alloc(struct Chunk *chunk);
 void chunk_init(struct Chunk *chunk, int3 chunk_pos);
 void chunk_mesh(struct Chunk *chunk);
-void chunk_render(struct Chunk *chunk, struct Camera *cam);
+void chunk_render(const struct Chunk *chunk, simd_float4x4 proj_view, double3 cam_pos);
 void chunk_uninit(struct Chunk *chunk);
 void chunk_destroy(struct Chunk *chunk);
 

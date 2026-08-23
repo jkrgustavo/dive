@@ -9,7 +9,7 @@ static struct {
 
     size_t i_cap;
     size_t i_n;
-    u16 *i_data;
+    u32 *i_data;
 } scratch = {
     .v_cap = 0,
     .v_n = 0,
@@ -23,15 +23,19 @@ static struct {
 static void scratch_push_vert(float3 v) {
     if (scratch.v_n == scratch.v_cap) {
         scratch.v_cap = scratch.v_cap ? scratch.v_cap * 2 : 8192;
-        scratch.v_data = realloc(scratch.v_data, scratch.v_cap * sizeof(float3));
+        float3 *v_data = realloc(scratch.v_data, scratch.v_cap * sizeof(float3));
+        assert(v_data);
+        scratch.v_data = v_data;
     }
     scratch.v_data[scratch.v_n++] = v;
 }
 
-static void scratch_push_ind(u16 i) {
+static void scratch_push_ind(u32 i) {
     if (scratch.i_n == scratch.i_cap) {
         scratch.i_cap = scratch.i_cap ? scratch.i_cap * 2 : 8192;
-        scratch.i_data = realloc(scratch.i_data, scratch.i_cap * sizeof(u16));
+        u32 *i_data = realloc(scratch.i_data, scratch.i_cap * sizeof(u32));
+        assert(i_data);
+        scratch.i_data = i_data;
     }
     scratch.i_data[scratch.i_n++] = i;
 }
@@ -48,7 +52,7 @@ static const float3 cube_vert_mask[] = {
     { 0.0, 1.0, 1.0 },
 };
 
-static const u16 cube_indices[] = {
+static const u32 cube_indices[] = {
     0, 3, 2,  0, 2, 1,   // -z
     4, 5, 6,  4, 6, 7,   // +z
     0, 4, 7,  0, 7, 3,   // -x
@@ -58,7 +62,10 @@ static const u16 cube_indices[] = {
 };
 
 void chunk_alloc(struct Chunk *chunk) {
-    chunk->data = calloc(1, sizeof(u8) * CHUNK_VOLUME);
+    assert(!chunk->flags.allocated);
+    u8 *data = calloc(CHUNK_VOLUME, sizeof(u8));
+    assert(data);
+    chunk->data = data;
     chunk->flags.allocated = true;
 }
 
@@ -83,7 +90,7 @@ void chunk_mesh(struct Chunk *chunk) {
             continue;
         }
 
-        u16 base_index = scratch.v_n;
+        u32 base_index = scratch.v_n;
 
         float3 pos = simd_float(index_to_local(vox));
         for (u32 v = 0; v < 8; v++) {
@@ -95,27 +102,28 @@ void chunk_mesh(struct Chunk *chunk) {
         }
     }
 
+    if (scratch.v_n == 0) {
+        chunk->flags.meshed = true;
+        chunk->flags.meshing = false;
+        return;
+    }
+
     chunk->mesh.vertex_count = scratch.v_n;
     chunk->mesh.index_count = scratch.i_n;
-    chunk->mesh.vertices = malloc(sizeof(float3) * scratch.v_n);
-    chunk->mesh.indices = malloc(sizeof(u16) * scratch.i_n);
-
-    memcpy(chunk->mesh.vertices, scratch.v_data, sizeof(float3) * scratch.v_n);
-    memcpy(chunk->mesh.indices, scratch.i_data, sizeof(u16) * scratch.i_n);
 
     chunk->mesh.vbuf = sg_make_buffer(&(sg_buffer_desc) {
         .usage.vertex_buffer = true,
         .data = { 
-            .ptr = chunk->mesh.vertices, 
-            .size = chunk->mesh.vertex_count * sizeof(float3)
+            .ptr = scratch.v_data, 
+            .size = scratch.v_n * sizeof(float3)
         }
     });
 
     chunk->mesh.ibuf = sg_make_buffer(&(sg_buffer_desc) {
         .usage.index_buffer = true,
         .data = { 
-            .ptr = chunk->mesh.indices, 
-            .size = chunk->mesh.index_count * sizeof(u16)
+            .ptr = scratch.i_data, 
+            .size = scratch.i_n * sizeof(u32)
         }
     });
     
@@ -123,17 +131,17 @@ void chunk_mesh(struct Chunk *chunk) {
     chunk->flags.meshed = true;
 }
 
-void chunk_render(struct Chunk *chunk, struct Camera *cam) {
+void chunk_render(const struct Chunk *chunk, simd_float4x4 proj_view, double3 cam_pos) {
     assert(chunk->flags.meshed);
+    if (chunk->mesh.index_count == 0) return;
 
     double3 chunk_pos = voxel_to_world(chunk_to_voxel(chunk->chunk_pos));
-    double3 cam_pos = cam->pos;
     double3 rel_pos_d = chunk_pos - cam_pos;
     float3 rel_pos = simd_float(rel_pos_d);
-    float3 scale = simd_make_float3(1.0, 1.0, 1.0);
+    float3 scale = simd_make_float3(0.5, 0.5, 0.5);
 
-    simd_float4x4 model_mat = simd_mul(mat_scale(scale), mat_translation(rel_pos));
-    simd_float4x4 mvp = simd_mul(cam->proj, simd_mul(cam->view, model_mat));
+    simd_float4x4 model_mat = simd_mul(mat_translation(rel_pos), mat_scale(scale));
+    simd_float4x4 mvp = simd_mul(proj_view, model_mat);
 
     sg_apply_bindings(&(sg_bindings){
         .index_buffer = chunk->mesh.ibuf,
@@ -147,14 +155,15 @@ void chunk_render(struct Chunk *chunk, struct Camera *cam) {
 void chunk_uninit(struct Chunk *chunk) {
     chunk->flags.initialized = false;
     chunk->flags.meshed = false;
+    chunk->flags.meshing = false;
     chunk->chunk_pos = simd_make_int3(0, 0, 0);
 
     chunk->mesh.index_count = 0;
     chunk->mesh.vertex_count = 0;
-    free(chunk->mesh.vertices);
-    free(chunk->mesh.indices);
-    chunk->mesh.vertices = NULL;
-    chunk->mesh.indices = NULL;
+    sg_destroy_buffer(chunk->mesh.vbuf);
+    sg_destroy_buffer(chunk->mesh.ibuf);
+    chunk->mesh.vbuf = (sg_buffer){0};
+    chunk->mesh.ibuf = (sg_buffer){0};
 
     memset(chunk->data, 0, sizeof(u8) * CHUNK_VOLUME);
 }
@@ -163,14 +172,10 @@ void chunk_destroy(struct Chunk *chunk) {
     chunk->flags.allocated = false;
     free(chunk->data);
 
-    if (chunk->flags.meshed) {
-        chunk->mesh.index_count = 0;
-        chunk->mesh.vertex_count = 0;
-        free(chunk->mesh.vertices);
-        free(chunk->mesh.indices);
-        sg_destroy_buffer(chunk->mesh.vbuf);
-        sg_destroy_buffer(chunk->mesh.ibuf);
-    }
+    chunk->mesh.index_count = 0;
+    chunk->mesh.vertex_count = 0;
+    sg_destroy_buffer(chunk->mesh.vbuf);
+    sg_destroy_buffer(chunk->mesh.ibuf);
 
     memset(chunk, 0, sizeof(struct Chunk));
 }

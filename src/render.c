@@ -29,7 +29,7 @@ void renderer_init(struct Renderer *renderer) {
         .layout.attrs = {
             [0] = { .format = SG_VERTEXFORMAT_FLOAT4 },
         },
-        .index_type = SG_INDEXTYPE_UINT16,
+        .index_type = SG_INDEXTYPE_UINT32,
         .depth = { 
             .compare = SG_COMPAREFUNC_LESS_EQUAL, 
             .write_enabled = true, 
