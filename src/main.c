@@ -3,14 +3,17 @@
 #include "render.h"
 #include "camera.h"
 #include "math.h"
+#include "input.h"
 
 #define CHUNK_COUNT 4
 
 void movement_window();
+void player_update_game_state(const struct Input *input);
 
 struct {
     struct Renderer renderer;
     struct Camera camera;
+    struct Input input;
     struct Chunk chunks[CHUNK_COUNT];
 } state;
 
@@ -20,9 +23,12 @@ static void init() {
     igGetIO()->ConfigFlags |= ImGuiConfigFlags_DockingEnable;
 
     f32 aspect = (float)sapp_width() / sapp_height();
+
+    sapp_lock_mouse(true);
     
+    input_init(&state.input);
     renderer_init(&state.renderer);
-    camera_init(&state.camera, (60.0 * (PI / 180.0)), 0.01, 1000.0, aspect);
+    camera_init(&state.camera, radians(60.0), 0.01, 1000.0, aspect);
     for (int c = 0; c < CHUNK_COUNT; c++) {
         struct Chunk *cx = &state.chunks[c];
         chunk_alloc(cx);
@@ -42,14 +48,19 @@ static void frame() {
         .dpi_scale = sapp_dpi_scale()
     });
     
+    input_update(&state.input);
+    player_update_game_state(&state.input);
+    camera_update(&state.camera, &state.input);
+
     movement_window();
 
     renderer_begin_pass(&state.renderer);
     for (int i = 0; i < CHUNK_COUNT; i++) {
         chunk_render(&state.chunks[i], &state.camera);
     }
-    sg_draw(0, 3, 1);
     renderer_end_pass();
+
+    input_end_frame(&state.input);
 }
 
 static void cleanup() {
@@ -59,6 +70,7 @@ static void cleanup() {
 
 static void input(const sapp_event* event) {
     simgui_handle_event(event);
+    input_handle(&state.input, event);
 }
 
 sapp_desc sokol_main(int argc, char* argv[]) {
@@ -79,15 +91,21 @@ sapp_desc sokol_main(int argc, char* argv[]) {
 }
 
 void movement_window() {
-    f32 tmpf[3] = { state.camera.forward.x, state.camera.forward.y, state.camera.forward.z };
-    f32 tmpp[3] = { state.camera.pos.x, state.camera.pos.y, state.camera.pos.z, };
-    igSetNextWindowSize((ImVec2){400, 100}, ImGuiCond_Once);
-    igBegin("move the mouse :)", NULL, 0);
-    igSliderFloat3("forward", tmpf, -1.0, 1.0);
-    igSliderFloat3("pos", tmpp, -25.0, 25.0);
+    float3 forward = derive_forward(state.camera.pitch, state.camera.yaw);
+    igBegin("Mouse direction", 0, 0);
+    igText("Mouse forward: (%f, %f, %f)", forward.x, forward.y, forward.z);
     igEnd();
-    float3 forward = simd_make_float3(tmpf[0], tmpf[1], tmpf[2]);
-    double3 pos = simd_make_double3(tmpp[0], tmpp[1], tmpp[2]);
-    state.camera.pos = pos;
-    camera_update(&state.camera, forward);
+}
+
+void player_update_game_state(const struct Input *input) {
+    if (input_key_pressed(input, SAPP_KEYCODE_ESCAPE))
+        sapp_request_quit();
+
+    if (input_key_pressed(input, SAPP_KEYCODE_Q)) {
+        if (sapp_mouse_locked()) {
+            sapp_lock_mouse(false);
+        } else {
+            sapp_lock_mouse(true);
+        }
+    }
 }

@@ -5,6 +5,16 @@
 
 #define PI (3.14159)
 
+inline static f32 radians(f32 deg) {
+    return deg * (PI/180.0);
+}
+
+static inline float3 derive_forward(f32 pitch, f32 yaw) {
+    f32 cosp = cos(pitch), sinp = sin(pitch);
+    f32 cosy = cos(yaw), siny = sin(yaw);
+    return simd_make_float3(siny * cosp, sinp, -cosy * cosp);
+}
+
 inline static simd_float4x4 mat_translation(float3 t) {
     return (simd_float4x4) {{
         {1.0, 0.0, 0.0, 0.0}, 

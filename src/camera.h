@@ -1,16 +1,19 @@
 #ifndef CAMERA_H
 #define CAMERA_H
 
+#define MOUSE_SENSITIVITY 0.01
+
 #include "util.h"
+#include "input.h"
 
 struct Camera {
     double3 pos;
-    float3 forward, up;
-    float fovy, near, far, aspect;
+    f32 pitch, yaw;
+    f32 fovy, near, far, aspect;
     simd_float4x4 view, proj;
 };
 
-void camera_init(struct Camera *cam, float fovy, float near, float far, float aspect);
-void camera_update(struct Camera *cam, float3 forward);
+void camera_init(struct Camera *cam, f32 fovy, f32 near, f32 far, f32 aspect);
+void camera_update(struct Camera *cam, const struct Input *input);
 
 #endif /* CAMERA_H */

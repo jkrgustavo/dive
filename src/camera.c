@@ -1,20 +1,56 @@
 #include "camera.h"
 #include "math.h"
 
-void camera_init(struct Camera *cam, float fovy, float near, float far, float aspect) {
-    cam->pos     = simd_make_double3(2.0, 2.0, -10.0);
-    cam->forward = simd_make_float3(0.0, 0.0, 1.0);
-    cam->up     = simd_make_float3(0.0, 1.0, 0.0);
-    cam->near = near;
-    cam->far = far;
-    cam->fovy = fovy;
+#define MOVE_SPEED simd_make_double3(0.1, 0.1, 0.1)
+#define PITCH_LIMIT radians(89.0f)
+
+void camera_init(struct Camera *cam, f32 fovy, f32 near, f32 far, f32 aspect) {
+    cam->pos    = simd_make_double3(2.0, 2.0, -10.0);
+    cam->pitch  = -(PI);
+    cam->yaw    = 0.0f;
+    cam->near   = near;
+    cam->far    = far;
+    cam->fovy   = fovy;
     cam->aspect = aspect;
 
-    cam->view = mat_view_dir(cam->forward, cam->up);
+    cam->view = mat_view_dir(derive_forward(cam->pitch, cam->yaw), simd_make_float3(0.0f, 1.0f, 0.0f));
     cam->proj = mat_proj(cam->fovy, cam->aspect, cam->near, cam->far);
 }
 
-void camera_update(struct Camera *cam, float3 forward) {
-    cam->forward = forward;
-    cam->view = mat_view_dir(cam->forward, cam->up);
+// TODO: delta time
+void handle_keys(struct Camera *cam, const struct Input *input) {
+    double3 forward = simd_double(derive_forward(cam->pitch, cam->yaw));
+
+    if (input_key_down(input, SAPP_KEYCODE_W))
+        cam->pos += (forward * MOVE_SPEED);
+
+    if (input_key_down(input, SAPP_KEYCODE_S))
+        cam->pos -= (forward * MOVE_SPEED);
+
+    if (input_key_down(input, SAPP_KEYCODE_A)) {
+        double3 dir = simd_normalize(simd_cross(forward, simd_make_double3(0.0, 1.0, 0.0)));
+        cam->pos -= (dir * MOVE_SPEED);
+    }
+
+    if (input_key_down(input, SAPP_KEYCODE_D)) {
+        double3 dir = simd_normalize(simd_cross(forward, simd_make_double3(0.0, 1.0, 0.0)));
+        cam->pos += (dir * MOVE_SPEED);
+    }
+}
+
+void update_mouse_movement(struct Camera *cam, const struct Input *input) {
+    cam->yaw   += input->mouse_delta.x * MOUSE_SENSITIVITY;
+    cam->pitch -= input->mouse_delta.y * MOUSE_SENSITIVITY;
+    cam->pitch = simd_clamp(cam->pitch, -PITCH_LIMIT, PITCH_LIMIT);
+
+    if (cam->yaw > PI) cam->yaw -= 2.0f * PI;
+    if (cam->yaw < -PI) cam->yaw += 2.0f * PI;
+}
+
+void camera_update(struct Camera *cam, const struct Input *input) {
+    update_mouse_movement(cam, input);
+    handle_keys(cam, input);
+
+    float3 forward = derive_forward(cam->pitch, cam->yaw);
+    cam->view = mat_view_dir(forward, simd_make_float3(0.0f, 1.0f, 0.0f));
 }
