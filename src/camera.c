@@ -1,7 +1,8 @@
 #include "camera.h"
 #include "mat_math.h"
+#include <simd/math.h>
 
-#define MOVE_SPEED simd_make_double3(0.1, 0.1, 0.1)
+#define MOVE_SPEED simd_make_double3(3.0, 3.0, 3.0)
 #define PITCH_LIMIT radians(89.0f)
 
 void camera_init(struct Camera *cam, f32 fovy, f32 near, f32 far, f32 aspect) {
@@ -20,22 +21,16 @@ void camera_init(struct Camera *cam, f32 fovy, f32 near, f32 far, f32 aspect) {
 // TODO: delta time
 void handle_keys(struct Camera *cam, const struct Input *input) {
     double3 forward = simd_double(derive_forward(cam->pitch, cam->yaw));
+    double3 right = simd_make_double3(cos(cam->yaw), 0.0, sin(cam->yaw));
+    double3 move_dir = simd_make_double3(0.0, 0.0, 0.0);
 
-    if (input_key_down(input, SAPP_KEYCODE_W))
-        cam->pos += (forward * MOVE_SPEED);
+    if (input_key_down(input, SAPP_KEYCODE_W)) move_dir += forward;
+    if (input_key_down(input, SAPP_KEYCODE_S)) move_dir -= forward;
+    if (input_key_down(input, SAPP_KEYCODE_D)) move_dir += right;
+    if (input_key_down(input, SAPP_KEYCODE_A)) move_dir -= right;
 
-    if (input_key_down(input, SAPP_KEYCODE_S))
-        cam->pos -= (forward * MOVE_SPEED);
-
-    if (input_key_down(input, SAPP_KEYCODE_A)) {
-        double3 dir = simd_normalize(simd_cross(forward, simd_make_double3(0.0, 1.0, 0.0)));
-        cam->pos -= (dir * MOVE_SPEED);
-    }
-
-    if (input_key_down(input, SAPP_KEYCODE_D)) {
-        double3 dir = simd_normalize(simd_cross(forward, simd_make_double3(0.0, 1.0, 0.0)));
-        cam->pos += (dir * MOVE_SPEED);
-    }
+    if (simd_length_squared(move_dir) > 0.0)
+        cam->pos += simd_normalize(move_dir) * (MOVE_SPEED * sapp_frame_duration());
 }
 
 void update_mouse_movement(struct Camera *cam, const struct Input *input) {

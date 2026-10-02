@@ -6,10 +6,7 @@ void input_handle(struct Input *input, const sapp_event *e) {
 
     switch (e->type) {
         case SAPP_EVENTTYPE_KEY_DOWN:
-            if (!mouse_locked && e->key_code != SAPP_KEYCODE_Q && e->key_code != SAPP_KEYCODE_ESCAPE) {
-                break;
-            }
-
+            if (!mouse_locked && e->key_code != SAPP_KEYCODE_Q && e->key_code != SAPP_KEYCODE_ESCAPE) break;
             if (!e->key_repeat) input->keys[e->key_code] |= KEY_PRESSED;
             input->keys[e->key_code] |= KEY_DOWN;
             break;
@@ -22,7 +19,6 @@ void input_handle(struct Input *input, const sapp_event *e) {
                 input->mouse_delta = simd_make_float2(0.0, 0.0);
                 break;
             }
-
             input->mouse_pos = simd_make_float2(e->mouse_x, e->mouse_y);
             input->mouse_delta += simd_make_float2(e->mouse_dx, e->mouse_dy); 
             break;
