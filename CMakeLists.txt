@@ -23,7 +23,9 @@ file(GLOB DIVE_SOURCES CONFIGURE_DEPENDS "src/*.c")
 add_executable(dive ${DIVE_SOURCES})
 target_compile_options(dive PRIVATE 
     -Wall -Wextra
-    $<$<CONFIG:Debug>:-fsanitize=address,undefined -fno-omit-frame-pointer>)
+    #$<$<CONFIG:Debug>:-fsanitize=address,undefined -fno-omit-frame-pointer>)
+    $<$<CONFIG:Debug>:-fno-omit-frame-pointer>)
 target_link_options(dive PRIVATE 
-    $<$<CONFIG:Debug>:-fsanitize=address,undefined>)
+    #$<$<CONFIG:Debug>:-fsanitize=address,undefined>)
+    $<$<CONFIG:Debug>:>)
 target_link_libraries(dive PRIVATE imgui-docking sokol)

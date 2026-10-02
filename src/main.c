@@ -2,13 +2,14 @@
 #include "chunk.h"
 #include "render.h"
 #include "camera.h"
-#include "math.h"
+#include "mat_math.h"
 #include "input.h"
 
 #define CHUNK_COUNT 1
+#define SCREEN_W 1024.0
+#define SCREEN_H 768.0
 
 void movement_window();
-void player_update_game_state(const struct Input *input);
 
 struct {
     struct Renderer renderer;
@@ -22,14 +23,14 @@ static void init() {
     simgui_setup(&(simgui_desc_t){ .logger.func = slog_func });
     igGetIO()->ConfigFlags |= ImGuiConfigFlags_DockingEnable;
 
-    f32 aspect = (float)sapp_width() / sapp_height();
+    f32 aspect = SCREEN_W / SCREEN_H;
 
     sapp_lock_mouse(true);
     
     input_init(&state.input);
     renderer_init(&state.renderer);
     camera_init(&state.camera, radians(60.0), 0.01, 1000.0, aspect);
-    for (int c = 0; c < CHUNK_COUNT; c++) {
+    for (u32 c = 0; c < CHUNK_COUNT; c++) {
         struct Chunk *cx = &state.chunks[c];
         chunk_alloc(cx);
         chunk_init(cx, simd_make_int3((c/2),  -1, (c%2)));
@@ -56,7 +57,7 @@ static void frame() {
 
     renderer_begin_pass(&state.renderer);
     simd_float4x4 proj_view = simd_mul(state.camera.proj, state.camera.view);
-    for (int i = 0; i < CHUNK_COUNT; i++) {
+    for (u32 i = 0; i < CHUNK_COUNT; i++) {
         chunk_render(&state.chunks[i], proj_view, state.camera.pos);
     }
     renderer_end_pass();
@@ -65,6 +66,9 @@ static void frame() {
 }
 
 static void cleanup() {
+    for (u32 i = 0; i < CHUNK_COUNT; i++) {
+        chunk_destroy(&state.chunks[i]);
+    }
     simgui_shutdown();
     sg_shutdown();
 }
@@ -82,8 +86,8 @@ sapp_desc sokol_main(int argc, char* argv[]) {
         .frame_cb = frame,
         .cleanup_cb = cleanup,
         .event_cb = input,
-        .width = 1024,
-        .height = 768,
+        .width = SCREEN_W,
+        .height = SCREEN_H,
         .window_title = "dive",
         .icon.sokol_default = true,
         .enable_clipboard = true,
@@ -99,17 +103,4 @@ void movement_window() {
     igSpacing();
     igText("Camera pos: (%f, %f, %f)", pos.x, pos.y, pos.z);
     igEnd();
-}
-
-void player_update_game_state(const struct Input *input) {
-    if (input_key_pressed(input, SAPP_KEYCODE_ESCAPE))
-        sapp_request_quit();
-
-    if (input_key_pressed(input, SAPP_KEYCODE_Q)) {
-        if (sapp_mouse_locked()) {
-            sapp_lock_mouse(false);
-        } else {
-            sapp_lock_mouse(true);
-        }
-    }
 }

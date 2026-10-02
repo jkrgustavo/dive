@@ -1,5 +1,5 @@
 #include "chunk.h"
-#include "math.h"
+#include "mat_math.h"
 
 // dynamic scratch to find the best buffer size for each chunk
 static struct {
@@ -138,7 +138,7 @@ void chunk_render(const struct Chunk *chunk, simd_float4x4 proj_view, double3 ca
     double3 chunk_pos = voxel_to_world(chunk_to_voxel(chunk->chunk_pos));
     double3 rel_pos_d = chunk_pos - cam_pos;
     float3 rel_pos = simd_float(rel_pos_d);
-    float3 scale = simd_make_float3(0.5, 0.5, 0.5);
+    float3 scale = simd_make_float3(1.0, 1.0, 1.0);
 
     simd_float4x4 model_mat = simd_mul(mat_translation(rel_pos), mat_scale(scale));
     simd_float4x4 mvp = simd_mul(proj_view, model_mat);

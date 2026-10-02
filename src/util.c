@@ -1,19 +1,20 @@
 #include "util.h"
 
-int read_file(char* buff, size_t len, const char* path) {
+char *read_file(const char* path) {
     FILE *fptr;
     fptr = fopen(path, "r");
     if (!fptr) return 0;
 
     int status = fseek(fptr, 0, SEEK_END);
-    if (status != 0) return 0;
+    if (status != 0) return NULL;
 
     long size = ftell(fptr);
-    if (size <= 0 || size >= (long)len) return 0;
+    char *buffer = malloc(size);
+    if (size <= 0) return NULL;
     rewind(fptr);
 
-    size_t n = fread(buff, 1, (size_t)size, fptr);
-    buff[n] = '\0';
+    size_t n = fread(buffer, 1, (size_t)size, fptr);
+    buffer[n] = '\0';
 
-    return 1;
+    return buffer;
 }

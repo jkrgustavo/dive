@@ -55,6 +55,7 @@ typedef simd_ulong2 ulong2;
 typedef simd_ulong3 ulong3;
 typedef simd_ulong4 ulong4;
 
-int read_file(char* buff, size_t len, const char* path);
+// Reads a file's contents into a malloc'ed buffer. User must free buffer
+char *read_file(const char* path);
 
 #endif /* UTIL_H */

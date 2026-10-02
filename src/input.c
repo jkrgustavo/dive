@@ -1,13 +1,15 @@
 #include "input.h"
 
-static void handle_mouse(struct Input *input, const sapp_event *e) {
-    input->mouse_pos = simd_make_float2(e->mouse_x, e->mouse_y);
-    input->mouse_delta += simd_make_float2(e->mouse_dx, e->mouse_dy); 
-}
 
 void input_handle(struct Input *input, const sapp_event *e) {
+    bool mouse_locked = sapp_mouse_locked();
+
     switch (e->type) {
         case SAPP_EVENTTYPE_KEY_DOWN:
+            if (!mouse_locked && e->key_code != SAPP_KEYCODE_Q && e->key_code != SAPP_KEYCODE_ESCAPE) {
+                break;
+            }
+
             if (!e->key_repeat) input->keys[e->key_code] |= KEY_PRESSED;
             input->keys[e->key_code] |= KEY_DOWN;
             break;
@@ -16,7 +18,13 @@ void input_handle(struct Input *input, const sapp_event *e) {
             input->keys[e->key_code] &= ~KEY_DOWN;
             break;
         case SAPP_EVENTTYPE_MOUSE_MOVE:
-            handle_mouse(input, e);
+            if (!mouse_locked) {
+                input->mouse_delta = simd_make_float2(0.0, 0.0);
+                break;
+            }
+
+            input->mouse_pos = simd_make_float2(e->mouse_x, e->mouse_y);
+            input->mouse_delta += simd_make_float2(e->mouse_dx, e->mouse_dy); 
             break;
         case SAPP_EVENTTYPE_SUSPENDED:
         case SAPP_EVENTTYPE_ICONIFIED:
@@ -45,4 +53,15 @@ void input_init(struct Input *input) {
     memset(input->keys, 0, sizeof(input->keys));
 }
 
+void player_update_game_state(const struct Input *input) {
+    if (input_key_pressed(input, SAPP_KEYCODE_ESCAPE))
+        sapp_request_quit();
 
+    if (input_key_pressed(input, SAPP_KEYCODE_Q)) {
+        if (sapp_mouse_locked()) {
+            sapp_lock_mouse(false);
+        } else {
+            sapp_lock_mouse(true);
+        }
+    }
+}

@@ -1,13 +1,13 @@
 #include "camera.h"
-#include "math.h"
+#include "mat_math.h"
 
 #define MOVE_SPEED simd_make_double3(0.1, 0.1, 0.1)
 #define PITCH_LIMIT radians(89.0f)
 
 void camera_init(struct Camera *cam, f32 fovy, f32 near, f32 far, f32 aspect) {
     cam->pos    = simd_make_double3(2.0, 2.0, -10.0);
-    cam->pitch  = -(PI);
-    cam->yaw    = 0.0f;
+    cam->pitch  = 0.0f;
+    cam->yaw    = PI;
     cam->near   = near;
     cam->far    = far;
     cam->fovy   = fovy;
@@ -50,6 +50,9 @@ void update_mouse_movement(struct Camera *cam, const struct Input *input) {
 void camera_update(struct Camera *cam, const struct Input *input) {
     update_mouse_movement(cam, input);
     handle_keys(cam, input);
+
+    cam->aspect = sapp_widthf() / sapp_heightf();
+    cam->proj = mat_proj(cam->fovy, cam->aspect, cam->near, cam->far);
 
     float3 forward = derive_forward(cam->pitch, cam->yaw);
     cam->view = mat_view_dir(forward, simd_make_float3(0.0f, 1.0f, 0.0f));

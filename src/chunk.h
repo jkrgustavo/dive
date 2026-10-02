@@ -27,16 +27,16 @@
 
 #define CHUNK_VOLUME ((CHUNK_DIMENSION_X) * (CHUNK_DIMENSION_Y) * (CHUNK_DIMENSION_Z))
 
-// pos in chunks -> voxels
+// absolute pos in chunks -> voxels
 static inline int3 chunk_to_voxel(int3 offset) { return CHUNK_DIM * offset; }
 
-// pos in voxels -> chunks
+// absolute pos in voxels -> chunks
 static inline int3 voxel_to_chunk(int3 offset) { return offset >> CHUNK_SHIFT; }
 
-// pos in voxels -> pos within a chunk [0, CHUNK_MAX)
+// absolute pos in voxels -> pos within a chunk [0, CHUNK_MAX)
 static inline int3 voxel_to_local(int3 offset) { return offset & CHUNK_MASK; }
 
-// pos within a chunk -> pos within the world (in voxels)
+// pos within a chunk -> absolute pos within the world (in voxels)
 static inline int3 local_to_voxel(int3 voxel_offset, int3 chunk_offset) { return voxel_offset + chunk_to_voxel(chunk_offset); }
 
 // pos within a chunk -> index into chunk data

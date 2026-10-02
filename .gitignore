@@ -1,2 +1,5 @@
 build*/
+profile/
 compile_commands.json
+profile.sh
+collect.py

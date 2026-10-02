@@ -8,14 +8,14 @@ void renderer_init(struct Renderer *renderer) {
         }
     };
 
-    char vshader[1024];
-    char fshader[1024];
-    assert(read_file(vshader, 1024, "src/shaders/vert.metal"));
-    assert(read_file(fshader, 1024, "src/shaders/frag.metal"));
+    char *vs_buffer = read_file("src/shaders/vert.metal");
+    assert(vs_buffer);
+    char *fs_buffer = read_file("src/shaders/frag.metal");
+    assert(fs_buffer);
     sg_shader shd = sg_make_shader(&(sg_shader_desc){
         .label = "Voxel",
-        .vertex_func.source = vshader,
-        .fragment_func.source = fshader,
+        .vertex_func.source = vs_buffer,
+        .fragment_func.source = fs_buffer,
         .uniform_blocks[0] = {
             .size = sizeof(simd_float4x4),
             .stage = SG_SHADERSTAGE_VERTEX,
@@ -38,6 +38,8 @@ void renderer_init(struct Renderer *renderer) {
 
     assert(sg_query_shader_state(shd) == SG_RESOURCESTATE_VALID);
     assert(sg_query_pipeline_state(renderer->pipeline) == SG_RESOURCESTATE_VALID);
+    free(vs_buffer);
+    free(fs_buffer);
 }
 
 void renderer_begin_pass(struct Renderer *renderer) {
