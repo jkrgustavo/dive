@@ -11,9 +11,6 @@ struct vs_out {
     float4 color;
 };
 
-struct vs_in {
-    float4 pos [[attribute(0)]];
-};
 
 static float3 hash_color(uint n) {
     n = (n ^ 61u) ^ (n >> 16);
@@ -26,13 +23,30 @@ static float3 hash_color(uint n) {
                   float((n >> 16) & 255u)) / 255.0;
 }
 
+// front (+z), back (-z), left (+x), right (-x), up (+y), down (-y)
+constant float3 corners[6][4] = {
+    { {0,0,0}, {1,0,0}, {1,1,0}, {0,1,0} },
+    { {0,0,0}, {0,1,0}, {1,1,0}, {1,0,0} },
+    { {0,0,0}, {0,1,0}, {0,1,1}, {0,0,1} },
+    { {0,0,0}, {0,0,1}, {0,1,1}, {0,1,0} },
+    { {0,0,0}, {0,0,1}, {1,0,1}, {1,0,0} },
+    { {0,0,0}, {1,0,0}, {1,0,1}, {0,0,1} },
+};
+
 vertex vs_out _main(
-    vs_in in [[stage_in]], 
     uint vid [[vertex_id]], 
-    constant mats& mat [[buffer(0)]]
+    constant mats& mat [[buffer(0)]],
+    device const uint64_t* quads [[buffer(8)]] 
 ) {
+    uint face = vid >> 2;
+    uint corner = vid & 3u;
+
+    uint64_t q = quads[face];
+    float3 pos = float3(uint3(q & 63u, (q>>6) & 63u, (q>>12) & 63u));
+    uint dir = uint((q>>30) & 7u);
+
     vs_out out;
-    out.position = mat.mvp * float4(in.pos.xyz, 1.0);
+    out.position = mat.mvp * float4(pos + corners[dir][corner], 1.0);
     out.color = float4(hash_color(vid), 1.0);
     return out;
 }

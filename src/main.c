@@ -29,7 +29,7 @@ static void init() {
     
     input_init(&state.input);
     renderer_init(&state.renderer);
-    camera_init(&state.camera, radians(60.0), 0.01, 1000.0, aspect);
+    camera_init(&state.camera, radians(60.0), 0.1, 1000.0, aspect);
     for (u32 c = 0; c < CHUNK_COUNT; c++) {
         struct Chunk *cx = &state.chunks[c];
         chunk_alloc(cx);

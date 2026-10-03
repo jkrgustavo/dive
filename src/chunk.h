@@ -2,20 +2,24 @@
 #define CHUNK_H
 
 #include "util.h"
-#include "camera.h"
 
-/* types of coordinates:
- *  | World - double3 - unbounded
- *  | Voxel - int3   - unbounded
- *  | Chunk - int3   - unbounded
- *  | Local - int3   - [0, CHUNK_DIM)
- *  | Index - size_t - [0, CHUNK_VOLUME)
- *
- * Minimum corner is the default. So voxel v occupies [v, v+1)
- * for each axis, and the same is true for chunks.
- *
+/*
  * Chunk dimensions must *always* be a power of 2
- * */
+ *
+ * Quad vert packing scheme:
+ *  | x pos  - 6
+ *  | y pos  - 6
+ *  | z pos  - 6
+ *  | width  - 6
+ *  | height - 6
+ *  | dir    - 3
+ *  | vox ID - 16
+ *  | pad    - 15
+ *
+ * Pos refers to the local coords within a chunk.
+ * Fits inside a single u64, unpack inside vertex shader, and
+ * lives in the MeshBuffer.
+ */
 
 #define CHUNK_DIMENSION_X 32
 #define CHUNK_DIMENSION_Y 32
@@ -59,6 +63,15 @@ static inline int3 world_to_voxel(double3 coord) { return simd_int_sat(floor(coo
 // convert voxels to world coords
 static inline double3 voxel_to_world(int3 offset) { return simd_double(offset); }
 
+enum Direction {
+    FRONT = 0,  // +z
+    BACK,       // -z
+    LEFT,       // +x
+    RIGHT,      // -x
+    UP,         // +y
+    DOWN        // -y
+};
+
 enum VoxelType {
     AIR = 0,
     SOLID = 1
@@ -69,6 +82,7 @@ struct MeshBuffer {
 
     u32 index_count;
 
+    sg_view vbuf_view;
     sg_buffer vbuf;
     sg_buffer ibuf;
 };

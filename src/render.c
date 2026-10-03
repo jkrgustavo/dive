@@ -20,20 +20,24 @@ void renderer_init(struct Renderer *renderer) {
             .size = sizeof(simd_float4x4),
             .stage = SG_SHADERSTAGE_VERTEX,
             .msl_buffer_n = 0
+        },
+        .views[0].storage_buffer = {
+            .stage = SG_SHADERSTAGE_VERTEX,
+            .readonly = true,
+            .msl_buffer_n = 8
         }
     });
 
     renderer->pipeline = sg_make_pipeline(&(sg_pipeline_desc){
         .label = "Voxel",
         .shader = shd,
-        .layout.attrs = {
-            [0] = { .format = SG_VERTEXFORMAT_FLOAT4 },
-        },
         .index_type = SG_INDEXTYPE_UINT32,
         .depth = { 
             .compare = SG_COMPAREFUNC_LESS_EQUAL, 
             .write_enabled = true, 
         },
+        .cull_mode = SG_CULLMODE_BACK,
+        .face_winding = SG_FACEWINDING_CCW,
     });
 
     assert(sg_query_shader_state(shd) == SG_RESOURCESTATE_VALID);

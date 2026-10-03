@@ -2,7 +2,7 @@
 #include "mat_math.h"
 #include <simd/math.h>
 
-#define MOVE_SPEED simd_make_double3(3.0, 3.0, 3.0)
+#define MOVE_SPEED simd_make_double3(5.0, 5.0, 5.0)
 #define PITCH_LIMIT radians(89.0f)
 
 void camera_init(struct Camera *cam, f32 fovy, f32 near, f32 far, f32 aspect) {
