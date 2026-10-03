@@ -21,6 +21,11 @@ void renderer_init(struct Renderer *renderer) {
             .stage = SG_SHADERSTAGE_VERTEX,
             .msl_buffer_n = 0
         },
+        .uniform_blocks[1] = {
+            .size = sizeof(simd_float4x4),
+            .stage = SG_SHADERSTAGE_VERTEX,
+            .msl_buffer_n = 1
+        },
         .views[0].storage_buffer = {
             .stage = SG_SHADERSTAGE_VERTEX,
             .readonly = true,
@@ -46,9 +51,11 @@ void renderer_init(struct Renderer *renderer) {
     free(fs_buffer);
 }
 
-void renderer_begin_pass(struct Renderer *renderer) {
+void renderer_begin_pass(struct Renderer *renderer, const struct Camera *camera) {
     sg_begin_pass(&(sg_pass){ .action = renderer->pass_action, .swapchain = sglue_swapchain() });
     sg_apply_pipeline(renderer->pipeline);
+    simd_float4x4 proj_view = simd_mul(camera->proj, camera->view);
+    sg_apply_uniforms(0, &SG_RANGE(proj_view));
 }
 
 void renderer_end_pass() {

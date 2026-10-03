@@ -1,13 +1,11 @@
 #include "util.h"
-#include "chunk.h"
 #include "render.h"
 #include "camera.h"
 #include "mat_math.h"
 #include "input.h"
+#include "world.h"
 
 #define CHUNK_COUNT 1
-#define SCREEN_W 1024.0
-#define SCREEN_H 768.0
 
 void movement_window();
 
@@ -15,7 +13,7 @@ struct {
     struct Renderer renderer;
     struct Camera camera;
     struct Input input;
-    struct Chunk chunks[CHUNK_COUNT];
+    struct World world;
 } state;
 
 static void init() {
@@ -23,21 +21,12 @@ static void init() {
     simgui_setup(&(simgui_desc_t){ .logger.func = slog_func });
     igGetIO()->ConfigFlags |= ImGuiConfigFlags_DockingEnable;
 
-    f32 aspect = SCREEN_W / SCREEN_H;
-
     sapp_lock_mouse(true);
     
     input_init(&state.input);
     renderer_init(&state.renderer);
-    camera_init(&state.camera, radians(60.0), 0.1, 1000.0, aspect);
-    for (u32 c = 0; c < CHUNK_COUNT; c++) {
-        struct Chunk *cx = &state.chunks[c];
-        chunk_alloc(cx);
-        chunk_init(cx, simd_make_int3((c/2),  -1, (c%2)));
-        memset(cx->data, 1, sizeof(u8) * CHUNK_VOLUME/2);
-        chunk_mesh(cx);
-    }
-
+    camera_init(&state.camera, radians(60.0), 0.1, 1000.0);
+    world_init(&state.world, CHUNK_COUNT);
 
 }
 
@@ -52,23 +41,19 @@ static void frame() {
     input_update(&state.input);
     player_update_game_state(&state.input);
     camera_update(&state.camera, &state.input);
+    world_update(&state.world);
 
     movement_window();
 
-    renderer_begin_pass(&state.renderer);
-    simd_float4x4 proj_view = simd_mul(state.camera.proj, state.camera.view);
-    for (u32 i = 0; i < CHUNK_COUNT; i++) {
-        chunk_render(&state.chunks[i], proj_view, state.camera.pos);
-    }
+    renderer_begin_pass(&state.renderer, &state.camera);
+    world_render(&state.world, state.camera.pos);
     renderer_end_pass();
 
     input_end_frame(&state.input);
 }
 
 static void cleanup() {
-    for (u32 i = 0; i < CHUNK_COUNT; i++) {
-        chunk_destroy(&state.chunks[i]);
-    }
+    world_destory(&state.world);
     simgui_shutdown();
     sg_shutdown();
 }
@@ -86,8 +71,8 @@ sapp_desc sokol_main(int argc, char* argv[]) {
         .frame_cb = frame,
         .cleanup_cb = cleanup,
         .event_cb = input,
-        .width = SCREEN_W,
-        .height = SCREEN_H,
+        .width = 1024,
+        .height = 768,
         .window_title = "dive",
         .icon.sokol_default = true,
         .enable_clipboard = true,

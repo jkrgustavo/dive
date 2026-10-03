@@ -5,14 +5,14 @@
 #define MOVE_SPEED simd_make_double3(5.0, 5.0, 5.0)
 #define PITCH_LIMIT radians(89.0f)
 
-void camera_init(struct Camera *cam, f32 fovy, f32 near, f32 far, f32 aspect) {
+void camera_init(struct Camera *cam, f32 fovy, f32 near, f32 far) {
     cam->pos    = simd_make_double3(2.0, 2.0, -10.0);
     cam->pitch  = 0.0f;
     cam->yaw    = PI;
     cam->near   = near;
     cam->far    = far;
     cam->fovy   = fovy;
-    cam->aspect = aspect;
+    cam->aspect = sapp_widthf() / sapp_heightf();
 
     cam->view = mat_view_dir(derive_forward(cam->pitch, cam->yaw), simd_make_float3(0.0f, 1.0f, 0.0f));
     cam->proj = mat_proj(cam->fovy, cam->aspect, cam->near, cam->far);

@@ -3,7 +3,15 @@
 
 #include "util.h"
 
-/*
+/* Types of coordinates:
+ *  | World - double3 - unbounded
+ *  | Voxel - int3   - unbounded
+ *  | Chunk - int3   - unbounded
+ *  | Local - int3   - [0, CHUNK_DIM)
+ *  | Index - size_t - [0, CHUNK_VOLUME)
+ *
+ * Minimum corner is the default. So voxel v occupies [v, v+1)
+ * for each axis, and the same is true for chunks.
  * Chunk dimensions must *always* be a power of 2
  *
  * Quad vert packing scheme:
@@ -98,7 +106,6 @@ struct Chunk {
 
     // whether the chunk is loaded/unloaded, etc.
     struct {
-        bool allocated: 1;
         bool initialized: 1;
         bool meshing: 1;
         bool meshed: 1;
@@ -107,11 +114,10 @@ struct Chunk {
 };
 
 
-void chunk_alloc(struct Chunk *chunk);
 void chunk_init(struct Chunk *chunk, int3 chunk_pos);
 void chunk_mesh(struct Chunk *chunk);
-void chunk_render(const struct Chunk *chunk, simd_float4x4 proj_view, double3 cam_pos);
-void chunk_uninit(struct Chunk *chunk);
+void chunk_render(const struct Chunk *chunk, double3 cam_pos);
+void chunk_reset(struct Chunk *chunk);
 void chunk_destroy(struct Chunk *chunk);
 
 #endif  /* CHUNK_H */

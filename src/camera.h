@@ -13,7 +13,7 @@ struct Camera {
     simd_float4x4 view, proj;
 };
 
-void camera_init(struct Camera *cam, f32 fovy, f32 near, f32 far, f32 aspect);
+void camera_init(struct Camera *cam, f32 fovy, f32 near, f32 far);
 void camera_update(struct Camera *cam, const struct Input *input);
 
 #endif /* CAMERA_H */
