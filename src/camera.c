@@ -15,7 +15,7 @@ void camera_init(struct Camera *cam, f32 fovy, f32 near, f32 far) {
     cam->aspect = sapp_widthf() / sapp_heightf();
 
     cam->view = mat_view_dir(derive_forward(cam->pitch, cam->yaw), simd_make_float3(0.0f, 1.0f, 0.0f));
-    cam->proj = mat_proj(cam->fovy, cam->aspect, cam->near, cam->far);
+    cam->proj = mat_proj(cam->fovy, cam->aspect, cam->near);
 }
 
 // TODO: delta time
@@ -47,7 +47,7 @@ void camera_update(struct Camera *cam, const struct Input *input) {
     handle_keys(cam, input);
 
     cam->aspect = sapp_widthf() / sapp_heightf();
-    cam->proj = mat_proj(cam->fovy, cam->aspect, cam->near, cam->far);
+    cam->proj = mat_proj(cam->fovy, cam->aspect, cam->near);
 
     float3 forward = derive_forward(cam->pitch, cam->yaw);
     cam->view = mat_view_dir(forward, simd_make_float3(0.0f, 1.0f, 0.0f));

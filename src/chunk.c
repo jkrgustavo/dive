@@ -60,15 +60,22 @@ static u64 pack_quad(int3 p, u8 width, u8 height, u8 dir, u16 data) {
          | ((u64)data   << 33);
 }
 
+static void mesh_release(struct MeshBuffer *mesh) {
+    sg_destroy_view(mesh->vbuf_view);
+    sg_destroy_buffer(mesh->vbuf);
+    sg_destroy_buffer(mesh->ibuf);
+    *mesh = (struct MeshBuffer){0};
+}
 
 void chunk_init(struct Chunk *chunk, int3 chunk_pos) {
     assert(chunk);
-    memset(chunk, 0, sizeof(struct Chunk));
+    assert(!chunk->flags.initialized);
+    if (!chunk->data) {
+        u8 *data = calloc(CHUNK_VOLUME, sizeof(u8));
+        assert(data);
+        chunk->data = data;
+    }
 
-    u8 *data = calloc(CHUNK_VOLUME, sizeof(u8));
-    assert(data);
-
-    chunk->data = data;
     chunk->chunk_pos = chunk_pos;
     chunk->flags.initialized = true;
 }
@@ -80,6 +87,7 @@ void chunk_mesh(struct Chunk *chunk) {
         return;
 
     chunk->flags.meshing = true;
+    mesh_release(&chunk->mesh);
 
     scratch.i_n = 0;
     scratch.v_n = 0;
@@ -162,12 +170,7 @@ void chunk_reset(struct Chunk *chunk) {
 
     chunk->mesh.index_count = 0;
     chunk->mesh.vertex_count = 0;
-    sg_destroy_buffer(chunk->mesh.vbuf);
-    sg_destroy_buffer(chunk->mesh.ibuf);
-    sg_destroy_view(chunk->mesh.vbuf_view);
-    chunk->mesh.vbuf = (sg_buffer){0};
-    chunk->mesh.ibuf = (sg_buffer){0};
-
+    mesh_release(&chunk->mesh);
     memset(chunk->data, 0, sizeof(u8) * CHUNK_VOLUME);
 }
 

@@ -2,6 +2,10 @@
 
 void renderer_init(struct Renderer *renderer) {
     renderer->pass_action = (sg_pass_action) {
+        .depth = {
+            .clear_value = 0,
+            .load_action = SG_LOADACTION_CLEAR
+        },
         .colors[0] = {
             .clear_value = { 0.6, 0.5, 0.7, 1.0 },
             .load_action = SG_LOADACTION_CLEAR,
@@ -38,7 +42,7 @@ void renderer_init(struct Renderer *renderer) {
         .shader = shd,
         .index_type = SG_INDEXTYPE_UINT32,
         .depth = { 
-            .compare = SG_COMPAREFUNC_LESS_EQUAL, 
+            .compare = SG_COMPAREFUNC_GREATER_EQUAL, 
             .write_enabled = true, 
         },
         .cull_mode = SG_CULLMODE_BACK,

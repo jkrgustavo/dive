@@ -57,15 +57,14 @@ inline static simd_float4x4 mat_view_dir(float3 dir, float3 up) {
     }};
 }
 
-inline static simd_float4x4 mat_proj(float fovy, float aspect, float near, float far) {
+inline static simd_float4x4 mat_proj(float fovy, float aspect, float near) {
     float ys = 1.0 / tanf(fovy * 0.5);
     float xs = ys / aspect;
-    float zs = far / (near - far);
     return (simd_float4x4){{
-        {xs,  0.0, 0.0,       0.0},
-        {0.0, ys,  0.0,       0.0},
-        {0.0, 0.0, zs,       -1.0},
-        {0.0, 0.0, near * zs, 0.0},
+        {xs,  0.0, 0.0,  0.0},
+        {0.0, ys,  0.0,  0.0},
+        {0.0, 0.0, 0.0, -1.0},
+        {0.0, 0.0, near, 0.0},
     }};
 }
 

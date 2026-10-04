@@ -6,7 +6,7 @@ void world_init(struct World *world, u32 chunk_count) {
 
     world->chunks = calloc(world->chunk_count, sizeof(struct Chunk*));
     for (u32 c = 0; c < chunk_count; c++) {
-        struct Chunk *cx = malloc(sizeof(struct Chunk));
+        struct Chunk *cx = calloc(1, sizeof(struct Chunk));
         chunk_init(cx, simd_make_int3((c/2),  -1, (c%2)));
         assert(cx->flags.initialized);
         memset(cx->data, 1, sizeof(u8) * CHUNK_VOLUME/2);
