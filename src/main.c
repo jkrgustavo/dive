@@ -4,6 +4,7 @@
 #include "mat_math.h"
 #include "input.h"
 #include "world.h"
+// #include "debug.h"
 
 #define CHUNK_COUNT 1
 
@@ -14,6 +15,7 @@ struct {
     struct Camera camera;
     struct Input input;
     struct World world;
+    // struct DebugUI debug;
 } state;
 
 static void init() {
@@ -21,13 +23,12 @@ static void init() {
     simgui_setup(&(simgui_desc_t){ .logger.func = slog_func });
     igGetIO()->ConfigFlags |= ImGuiConfigFlags_DockingEnable;
 
-    sapp_lock_mouse(true);
-    
     input_init(&state.input);
     renderer_init(&state.renderer);
     camera_init(&state.camera, radians(60.0), 0.1, 1000.0);
     world_init(&state.world, CHUNK_COUNT);
 
+    // debug_init(&state.debug);
 }
 
 static void frame() {
@@ -42,11 +43,13 @@ static void frame() {
     player_update_game_state(&state.input);
     camera_update(&state.camera, &state.input);
     world_update(&state.world);
+    // debug_update(&state.debug, &state.input);
 
     movement_window();
 
     renderer_begin_pass(&state.renderer, &state.camera);
     world_render(&state.world, state.camera.pos);
+    // debug_draw(&state.debug, &state.camera, &state.input, &state.world);
     renderer_end_pass();
 
     input_end_frame(&state.input);
@@ -60,6 +63,7 @@ static void cleanup() {
 
 static void input(const sapp_event* event) {
     simgui_handle_event(event);
+    if (event->type == SAPP_EVENTTYPE_KEY_DOWN && igGetIO()->WantCaptureKeyboard) return;
     input_handle(&state.input, event);
 }
 
@@ -78,14 +82,4 @@ sapp_desc sokol_main(int argc, char* argv[]) {
         .enable_clipboard = true,
         .logger.func = slog_func,
     };
-}
-
-void movement_window() {
-    float3 forward = derive_forward(state.camera.pitch, state.camera.yaw);
-    double3 pos = state.camera.pos;
-    igBegin("Mouse direction", 0, 0);
-    igText("Mouse forward: (%f, %f, %f)", forward.x, forward.y, forward.z);
-    igSpacing();
-    igText("Camera pos: (%f, %f, %f)", pos.x, pos.y, pos.z);
-    igEnd();
 }

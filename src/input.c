@@ -56,8 +56,10 @@ void player_update_game_state(const struct Input *input) {
     if (input_key_pressed(input, SAPP_KEYCODE_Q)) {
         if (sapp_mouse_locked()) {
             sapp_lock_mouse(false);
+            igGetIO()->ConfigFlags &= ~ImGuiConfigFlags_NoMouse;
         } else {
             sapp_lock_mouse(true);
+            igGetIO()->ConfigFlags |= ImGuiConfigFlags_NoMouse;
         }
     }
 }
