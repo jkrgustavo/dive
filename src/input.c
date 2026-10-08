@@ -4,6 +4,8 @@
 void input_handle(struct Input *input, const sapp_event *e) {
     bool mouse_locked = sapp_mouse_locked();
 
+    // When the mouse is unlocked, don't process any keydown events besides Q and ESC,
+    // or update the mouse position
     switch (e->type) {
         case SAPP_EVENTTYPE_KEY_DOWN:
             if (!mouse_locked && e->key_code != SAPP_KEYCODE_Q && e->key_code != SAPP_KEYCODE_ESCAPE) break;
@@ -49,17 +51,3 @@ void input_init(struct Input *input) {
     memset(input->keys, 0, sizeof(input->keys));
 }
 
-void player_update_game_state(const struct Input *input) {
-    if (input_key_pressed(input, SAPP_KEYCODE_ESCAPE))
-        sapp_request_quit();
-
-    if (input_key_pressed(input, SAPP_KEYCODE_Q)) {
-        if (sapp_mouse_locked()) {
-            sapp_lock_mouse(false);
-            igGetIO()->ConfigFlags &= ~ImGuiConfigFlags_NoMouse;
-        } else {
-            sapp_lock_mouse(true);
-            igGetIO()->ConfigFlags |= ImGuiConfigFlags_NoMouse;
-        }
-    }
-}

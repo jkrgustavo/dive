@@ -23,9 +23,9 @@
  * Offsets are based off the world center.
  */
 
-#define WORLD_SIZE_X 2
+#define WORLD_SIZE_X 4
 #define WORLD_SIZE_Y 2
-#define WORLD_SIZE_Z 2
+#define WORLD_SIZE_Z 4
 
 #define WORLD_MASK simd_make_int3(WORLD_SIZE_X-1, WORLD_SIZE_Y-1, WORLD_SIZE_Z-1)
 #define WORLD_SHIFT simd_make_int3(__builtin_ctz(WORLD_SIZE_X), __builtin_ctz(WORLD_SIZE_Y), __builtin_ctz(WORLD_SIZE_Z))

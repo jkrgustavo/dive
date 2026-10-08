@@ -1,7 +1,6 @@
 #ifndef CAMERA_H
 #define CAMERA_H
 
-#define MOUSE_SENSITIVITY 0.01
 
 #include "util.h"
 #include "input.h"
@@ -13,7 +12,9 @@ struct Camera {
     simd_float4x4 view, proj;
 };
 
-void camera_init(struct Camera *cam, f32 fovy, f32 near, f32 far);
-void camera_update(struct Camera *cam, const struct Input *input);
+#include "player.h"
+
+void camera_init(struct Camera *cam, const struct Player *player, f32 fovy, f32 near, f32 far);
+void camera_update(struct Camera *cam, const struct Player *player, const struct Input *input);
 
 #endif /* CAMERA_H */

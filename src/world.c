@@ -1,9 +1,11 @@
 #include "world.h"
 
 void generate_terrain(struct Chunk *chunk) {
+    i32 ground_height = 0;
     for (u32 v = 0; v < CHUNK_VOLUME; v++) {
         int3 pos_w = local_to_voxel(chunk_index_to_local(v), chunk->position);
-        if (pos_w.y < 0) {
+        ground_height = sin(pos_w.x / 2.5) * 3;
+        if (pos_w.y < ground_height) {
             chunk->data[v] = SOLID;
         } else {
             chunk->data[v] = AIR;

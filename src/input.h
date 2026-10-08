@@ -28,7 +28,6 @@ void input_handle(struct Input *input, const sapp_event *e);
 void input_update(struct Input *input);
 void input_init(struct Input *input);
 void input_end_frame(struct Input *input);
-void player_update_game_state(const struct Input *input);
 
 static inline bool input_key_down(const struct Input *input, sapp_keycode key) {
     return (key < KEY_ARRAY_SIZE) && (input->keys[key] & KEY_DOWN);

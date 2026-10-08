@@ -4,9 +4,8 @@
 #include "mat_math.h"
 #include "input.h"
 #include "world.h"
-// #include "debug.h"
-
-#define CHUNK_COUNT 4
+#include "player.h"
+#include "debug.h"
 
 void movement_window();
 
@@ -15,7 +14,8 @@ struct {
     struct Camera camera;
     struct Input input;
     struct World world;
-    // struct DebugUI debug;
+    struct Player player;
+    struct DebugUI debug;
 } state;
 
 static void init() {
@@ -24,11 +24,12 @@ static void init() {
     igGetIO()->ConfigFlags |= ImGuiConfigFlags_DockingEnable;
 
     input_init(&state.input);
+    player_init(&state.player, (double3){ 0.0, 1.0, 0.0 });
     renderer_init(&state.renderer);
-    camera_init(&state.camera, radians(60.0), 0.1, 1000.0);
+    camera_init(&state.camera, &state.player, radians(60.0), 0.1, 1000.0);
     world_init(&state.world);
 
-    // debug_init(&state.debug);
+    debug_init(&state.debug);
 }
 
 static void frame() {
@@ -40,14 +41,14 @@ static void frame() {
     });
     
     input_update(&state.input);
-    player_update_game_state(&state.input);
-    camera_update(&state.camera, &state.input);
+    player_update(&state.player, &state.camera, &state.input);
+    camera_update(&state.camera, &state.player, &state.input);
     world_update(&state.world);
-    // debug_update(&state.debug, &state.input);
+    debug_update(&state.debug, &state.input);
 
     renderer_begin_pass(&state.renderer, &state.camera);
     world_render(&state.world, state.camera.pos);
-    // debug_draw(&state.debug, &state.camera, &state.input, &state.world);
+    debug_draw(&state.debug, &state.camera, &state.input, &state.world);
     renderer_end_pass();
 
     input_end_frame(&state.input);
@@ -61,7 +62,8 @@ static void cleanup() {
 
 static void input(const sapp_event* event) {
     simgui_handle_event(event);
-    if (event->type == SAPP_EVENTTYPE_KEY_DOWN && igGetIO()->WantCaptureKeyboard) return;
+    if (event->type == SAPP_EVENTTYPE_KEY_DOWN && igGetIO()->WantCaptureKeyboard) 
+        return;
     input_handle(&state.input, event);
 }
 
@@ -83,6 +85,7 @@ sapp_desc sokol_main(int argc, char* argv[]) {
 }
 /*
  * TODO:
- *  - Separate camera from player, this fixes hacky movement speed impl
- * 
+ *  - Add physics
+ *  - textures
+ *  - chunk streaming
  * */
