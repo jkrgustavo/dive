@@ -67,6 +67,7 @@ static void mesh_release(struct MeshBuffer *mesh) {
     *mesh = (struct MeshBuffer){0};
 }
 
+// Takes in this chunk's world position in chunks
 void chunk_init(struct Chunk *chunk, int3 chunk_pos) {
     assert(chunk);
     assert(!chunk->flags.initialized);
@@ -76,14 +77,38 @@ void chunk_init(struct Chunk *chunk, int3 chunk_pos) {
         chunk->data = data;
     }
 
-    chunk->chunk_pos = chunk_pos;
+    chunk->position = chunk_pos;
     chunk->flags.initialized = true;
 }
-// 6 faces, 8 verts, 36 indices
-// TODO: use quads instead of the entire voxel
-void chunk_mesh(struct Chunk *chunk) {
+
+void chunk_set_block(struct Chunk *chunk, int3 local_pos, enum VoxelType id) {
+    assert(chunk->flags.initialized);
+    u32 idx = local_to_chunk_index(local_pos);
+    chunk->data[idx] = id;
+    chunk->flags.dirty = true;
+}
+
+bool face_exposed(struct Chunk *chunk, const struct Chunk *neighbors[6], int3 local_pos, u32 dir) {
+    int3 neighbor_pos = local_pos + dir_offset[dir];
+
+    if (!voxel_in_chunk(neighbor_pos)) {
+        const struct Chunk *neighbor_chunk = neighbors[dir];
+
+        if (neighbor_chunk == NULL) return true;
+        if (!neighbor_chunk->flags.initialized) return true;
+
+        int3 neighbor_pos_abs = local_to_voxel(local_pos + dir_offset[dir], chunk->position);
+        u32 neighbor_vox_idx = local_to_chunk_index(voxel_to_local(neighbor_pos_abs));
+        
+        return neighbor_chunk->data[neighbor_vox_idx] == AIR;
+    } else {
+        return chunk->data[local_to_chunk_index(neighbor_pos)] == AIR;
+    }
+}
+
+void chunk_mesh(struct Chunk *chunk, const struct Chunk *neighbors[6]) {
     assert(chunk && chunk->flags.initialized && !chunk->flags.meshing);
-    if (chunk->flags.meshed)
+    if (chunk->flags.meshed && !chunk->flags.dirty)
         return;
 
     chunk->flags.meshing = true;
@@ -92,14 +117,18 @@ void chunk_mesh(struct Chunk *chunk) {
     scratch.i_n = 0;
     scratch.v_n = 0;
     for (size_t vox = 0; vox < CHUNK_VOLUME; vox++) {
-        if (chunk->data[vox] == AIR) {
+        if (chunk->data[vox] == AIR)
             continue;
-        }
 
-        int3 local_pos = index_to_local(vox);
+        int3 local_pos = chunk_index_to_local(vox);
         for (u32 dir = 0; dir < 6; dir++) {
+            if (!face_exposed(chunk, neighbors, local_pos, dir))
+                continue;
+
             u32 base_index = scratch.v_n * 4;
-            scratch_push_vert(pack_quad(local_pos + face_vertex_mask[dir], 1, 1, dir, chunk->data[vox]));
+
+            u64 quad = pack_quad(local_pos + face_vertex_mask[dir], 1, 1, dir, chunk->data[vox]);
+            scratch_push_vert(quad);
 
             for (u32 idx = 0; idx < 6; idx++) {
                 scratch_push_ind(base_index + face_indices[idx]);
@@ -108,7 +137,9 @@ void chunk_mesh(struct Chunk *chunk) {
     }
 
     if (scratch.v_n == 0) {
+        mesh_release(&chunk->mesh);
         chunk->flags.meshing = false;
+        chunk->flags.dirty = false;
         chunk->flags.meshed = true;
         return;
     }
@@ -137,6 +168,7 @@ void chunk_mesh(struct Chunk *chunk) {
     });
     
     chunk->flags.meshing = false;
+    chunk->flags.dirty = false;
     chunk->flags.meshed = true;
 }
 
@@ -145,7 +177,7 @@ void chunk_render(const struct Chunk *chunk, double3 cam_pos) {
     assert(chunk->flags.meshed);
     if (chunk->mesh.index_count == 0) return;
 
-    double3 chunk_pos = voxel_to_world(chunk_to_voxel(chunk->chunk_pos));
+    double3 chunk_pos = voxel_to_world(chunk_to_voxel(chunk->position));
     double3 rel_pos_d = chunk_pos - cam_pos;
     float3 rel_pos = simd_float(rel_pos_d);
     float3 scale = simd_make_float3(1.0, 1.0, 1.0);
@@ -156,7 +188,7 @@ void chunk_render(const struct Chunk *chunk, double3 cam_pos) {
         .index_buffer = chunk->mesh.ibuf,
         .views[0] = chunk->mesh.vbuf_view
     });
-
+    // view and proj mats are applied in the begin_pass function
     sg_apply_uniforms(1, &SG_RANGE(model_mat));
     sg_draw(0, chunk->mesh.index_count, 1);
 }
@@ -166,7 +198,8 @@ void chunk_reset(struct Chunk *chunk) {
     chunk->flags.initialized = false;
     chunk->flags.meshed = false;
     chunk->flags.meshing = false;
-    chunk->chunk_pos = simd_make_int3(0, 0, 0);
+    chunk->flags.dirty = false;
+    chunk->position = simd_make_int3(0, 0, 0);
 
     chunk->mesh.index_count = 0;
     chunk->mesh.vertex_count = 0;
@@ -185,5 +218,4 @@ void chunk_destroy(struct Chunk *chunk) {
     sg_destroy_view(chunk->mesh.vbuf_view);
 
     memset(chunk, 0, sizeof(struct Chunk));
-    chunk = NULL;
 }

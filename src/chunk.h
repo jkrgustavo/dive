@@ -40,36 +40,42 @@
 #define CHUNK_VOLUME ((CHUNK_DIMENSION_X) * (CHUNK_DIMENSION_Y) * (CHUNK_DIMENSION_Z))
 
 // absolute pos in chunks -> voxels
-static inline int3 chunk_to_voxel(int3 offset) { return CHUNK_DIM * offset; }
+static inline int3 chunk_to_voxel(const int3 chunk_pos) { return CHUNK_DIM * chunk_pos; }
 
 // absolute pos in voxels -> chunks
-static inline int3 voxel_to_chunk(int3 offset) { return offset >> CHUNK_SHIFT; }
+static inline int3 voxel_to_chunk(const int3 vox_pos) { return vox_pos >> CHUNK_SHIFT; }
 
 // absolute pos in voxels -> pos within a chunk [0, CHUNK_MAX)
-static inline int3 voxel_to_local(int3 offset) { return offset & CHUNK_MASK; }
+static inline int3 voxel_to_local(const int3 vox_pos) { return vox_pos & CHUNK_MASK; }
 
 // pos within a chunk -> absolute pos within the world (in voxels)
-static inline int3 local_to_voxel(int3 voxel_offset, int3 chunk_offset) { return voxel_offset + chunk_to_voxel(chunk_offset); }
+static inline int3 local_to_voxel(const int3 local_pos, const int3 chunk_pos) { return local_pos + chunk_to_voxel(chunk_pos); }
 
 // pos within a chunk -> index into chunk data
-static inline size_t local_to_index(int3 chunk_pos) {
-    return (chunk_pos.x + (chunk_pos.y * CHUNK_DIMENSION_X) + (chunk_pos.z * (CHUNK_DIMENSION_X * CHUNK_DIMENSION_Y)));
+static inline u32 local_to_chunk_index(const int3 local_pos) {
+    return (local_pos.x + (local_pos.y * CHUNK_DIMENSION_X) + (local_pos.z * (CHUNK_DIMENSION_X * CHUNK_DIMENSION_Y)));
 }
 
 // index into chunk data -> pos within a chunk
-static inline int3 index_to_local(size_t idx) {
+static inline int3 chunk_index_to_local(const u32 idx) {
     return simd_make_int3(
-        (int)(idx & (CHUNK_MASK.x)),
-        (int)((idx >> CHUNK_SHIFT.x) & CHUNK_MASK.y),
-        (int)(idx >> (CHUNK_SHIFT.x + CHUNK_SHIFT.y))
+        (i32)(idx & (CHUNK_MASK.x)),
+        (i32)((idx >> CHUNK_SHIFT.x) & CHUNK_MASK.y),
+        (i32)(idx >> (CHUNK_SHIFT.x + CHUNK_SHIFT.y))
     );
 }
 
 // convert continuous world coords to voxels
-static inline int3 world_to_voxel(double3 coord) { return simd_int_sat(floor(coord)); }
+static inline int3 world_to_voxel(const double3 coord) { return simd_int_sat(floor(coord)); }
 
 // convert voxels to world coords
-static inline double3 voxel_to_world(int3 offset) { return simd_double(offset); }
+static inline double3 voxel_to_world(const int3 world_vox_pos) { return simd_double(world_vox_pos); }
+
+
+// takes a local voxel pos and checks 
+static inline bool voxel_in_chunk(int3 local_pos) {
+    return simd_all(local_pos >= 0) && simd_all(local_pos < CHUNK_DIM);
+}
 
 enum Direction {
     FRONT = 0,  // +z
@@ -78,6 +84,15 @@ enum Direction {
     RIGHT,      // -x
     UP,         // +y
     DOWN        // -y
+};
+
+static const int3 dir_offset[] = {
+    {  0,  0,  1 }, // front +z
+    {  0,  0, -1 }, // back  -z
+    {  1,  0,  0 }, // left  +x
+    { -1,  0,  0 }, // right -x
+    {  0,  1,  0 }, // up    +y
+    {  0, -1,  0 }, // down  -y
 };
 
 enum VoxelType {
@@ -97,7 +112,7 @@ struct MeshBuffer {
 
 struct Chunk {
     // world position in chunks
-    int3 chunk_pos;
+    int3 position;
 
     // array of voxel data for this chunk
     u8 *data;
@@ -109,13 +124,15 @@ struct Chunk {
         bool initialized: 1;
         bool meshing: 1;
         bool meshed: 1;
+        bool dirty: 1;
     } flags;
 
 };
 
 
 void chunk_init(struct Chunk *chunk, int3 chunk_pos);
-void chunk_mesh(struct Chunk *chunk);
+void chunk_set_block(struct Chunk *chunk, int3 local_pos, enum VoxelType id);
+void chunk_mesh(struct Chunk *chunk, const struct Chunk *neighbors[6]);
 void chunk_render(const struct Chunk *chunk, double3 cam_pos);
 void chunk_reset(struct Chunk *chunk);
 void chunk_destroy(struct Chunk *chunk);

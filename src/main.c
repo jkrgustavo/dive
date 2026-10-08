@@ -6,7 +6,7 @@
 #include "world.h"
 // #include "debug.h"
 
-#define CHUNK_COUNT 1
+#define CHUNK_COUNT 4
 
 void movement_window();
 
@@ -26,7 +26,7 @@ static void init() {
     input_init(&state.input);
     renderer_init(&state.renderer);
     camera_init(&state.camera, radians(60.0), 0.1, 1000.0);
-    world_init(&state.world, CHUNK_COUNT);
+    world_init(&state.world);
 
     // debug_init(&state.debug);
 }
@@ -45,8 +45,6 @@ static void frame() {
     world_update(&state.world);
     // debug_update(&state.debug, &state.input);
 
-    movement_window();
-
     renderer_begin_pass(&state.renderer, &state.camera);
     world_render(&state.world, state.camera.pos);
     // debug_draw(&state.debug, &state.camera, &state.input, &state.world);
@@ -56,7 +54,7 @@ static void frame() {
 }
 
 static void cleanup() {
-    world_destory(&state.world);
+    world_destroy(&state.world);
     simgui_shutdown();
     sg_shutdown();
 }
@@ -83,3 +81,8 @@ sapp_desc sokol_main(int argc, char* argv[]) {
         .logger.func = slog_func,
     };
 }
+/*
+ * TODO:
+ *  - Separate camera from player, this fixes hacky movement speed impl
+ * 
+ * */
