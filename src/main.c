@@ -5,9 +5,7 @@
 #include "input.h"
 #include "world.h"
 #include "player.h"
-#include "debug.h"
-
-void movement_window();
+// #include "debug.h"
 
 struct {
     struct Renderer renderer;
@@ -15,11 +13,16 @@ struct {
     struct Input input;
     struct World world;
     struct Player player;
-    struct DebugUI debug;
+    // struct DebugUI debug;
 } state;
 
 static void init() {
-    sg_setup(&(sg_desc){ .environment = sglue_environment(), .logger.func = slog_func });
+    sg_setup(&(sg_desc){ 
+        .environment = sglue_environment(), 
+        .logger.func = slog_func, 
+        .buffer_pool_size = 512,
+        .view_pool_size = 256,
+    });
     simgui_setup(&(simgui_desc_t){ .logger.func = slog_func });
     igGetIO()->ConfigFlags |= ImGuiConfigFlags_DockingEnable;
 
@@ -29,7 +32,7 @@ static void init() {
     camera_init(&state.camera, &state.player, radians(60.0), 0.1, 1000.0);
     world_init(&state.world);
 
-    debug_init(&state.debug);
+    // debug_init(&state.debug);
 }
 
 static void frame() {
@@ -43,12 +46,12 @@ static void frame() {
     input_update(&state.input);
     player_update(&state.player, &state.camera, &state.input);
     camera_update(&state.camera, &state.player, &state.input);
-    world_update(&state.world);
-    debug_update(&state.debug, &state.input);
+    world_update(&state.world, &state.player);
+    // debug_update(&state.debug, &state.input);
 
     renderer_begin_pass(&state.renderer, &state.camera);
     world_render(&state.world, state.camera.pos);
-    debug_draw(&state.debug, &state.camera, &state.input, &state.world);
+    // debug_draw(&state.debug, &state.camera, &state.input, &state.world, &state.player);
     renderer_end_pass();
 
     input_end_frame(&state.input);

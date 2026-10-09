@@ -3,6 +3,7 @@
 
 #include "util.h"
 #include "chunk.h"
+#include "player.h"
 
 /* Types of coordinates:
  *  | World  - double3 - unbounded
@@ -12,7 +13,7 @@
  *  | Index  - u32     - [0, CHUNK_VOLUME)
  *
  * Offsets:
- *  | Offset - int3   - [-(dimension/2), (dimension/2)]
+ *  | Offset - int3   - (-(dimension/2), (dimension/2))
  *
  * Minimum corner is the default for positions. So 
  * voxel v occupies [v, v+1) for each axis, and the same 
@@ -23,9 +24,9 @@
  * Offsets are based off the world center.
  */
 
-#define WORLD_SIZE_X 4
-#define WORLD_SIZE_Y 2
-#define WORLD_SIZE_Z 4
+#define WORLD_SIZE_X 8
+#define WORLD_SIZE_Y 4
+#define WORLD_SIZE_Z 8
 
 #define WORLD_MASK simd_make_int3(WORLD_SIZE_X-1, WORLD_SIZE_Y-1, WORLD_SIZE_Z-1)
 #define WORLD_SHIFT simd_make_int3(__builtin_ctz(WORLD_SIZE_X), __builtin_ctz(WORLD_SIZE_Y), __builtin_ctz(WORLD_SIZE_Z))
@@ -50,14 +51,26 @@ static inline int3 world_index_to_chunk(u32 idx, int3 world_pos) {
 }
 
 struct World {
-    // total number of chunks in the chunk array
+    // Total number of chunks in the chunk array
     u32 chunk_count;
 
-    // world position in chunks
+    // World position in chunks
     int3 position; 
 
-    // position of world's center in chunks
+    // Position of world's center in chunks
     int3 center;
+
+    // Chunk offsets from world center. Sorted by distance from world center
+    int3 *offsets;
+    u32 offset_count;
+
+    // View radius, x == z, y is the height of the cylinder
+    int3 view_radius;
+
+    // Tracks and limits how many chunks are processed in a frame
+    struct {
+        u32 count, max;
+    } load_limits, mesh_limits;
 
     // array of chunks that are currently loaded
     struct Chunk **chunks;
@@ -70,17 +83,15 @@ static inline bool chunk_in_bounds(struct World *world, int3 chunk_pos) {
 
 static inline struct Chunk *world_get_chunk(struct World *world, int3 chunk_pos) {
     struct Chunk *c = world->chunks[chunk_to_world_index(chunk_pos)];
-    if (c->flags.initialized && simd_all(c->position == chunk_pos)) {
-        return c;
-    } else {
+    if (c == NULL || !c->flags.initialized || !simd_all(c->position == chunk_pos)) {
         return NULL;
-    }
-    
-
+    } else {
+        return c;
+    }     
 }
 
 void world_init(struct World *world);
-void world_update(struct World *world);
+void world_update(struct World *world, struct Player *player);
 void world_render(struct World *world, double3 camera_pos);
 void world_destroy(struct World *world);
 

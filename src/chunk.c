@@ -79,6 +79,9 @@ void chunk_init(struct Chunk *chunk, int3 chunk_pos) {
 
     chunk->position = chunk_pos;
     chunk->flags.initialized = true;
+    chunk->flags.meshing = false;
+    chunk->flags.meshed = false;
+    chunk->flags.dirty = false;
 }
 
 void chunk_set_block(struct Chunk *chunk, int3 local_pos, enum VoxelType id) {
