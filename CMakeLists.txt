@@ -6,6 +6,8 @@ enable_language(OBJC CXX)
 if(NOT CMAKE_BUILD_TYPE)
     set(CMAKE_BUILD_TYPE Debug CACHE STRING "" FORCE)
 endif()
+
+
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_C_STANDARD_REQUIRED ON)
 
@@ -19,10 +21,20 @@ target_link_libraries(sokol PUBLIC
     "-framework QuartzCore"
     "-framework Metal")
 
+
 file(GLOB DIVE_SOURCES CONFIGURE_DEPENDS "src/*.c")
 add_executable(dive ${DIVE_SOURCES})
+
+include(CheckIPOSupported)
+check_ipo_supported(RESULT HAVE_IPO)
+if(HAVE_IPO)
+    set_property(TARGET dive PROPERTY INTERPROCEDURAL_OPTIMIZATION_RELEASE TRUE)
+endif()
+
+target_include_directories(dive PRIVATE src)
 target_compile_options(dive PRIVATE 
     -Wall -Wextra
+    $<$<CONFIG:Release>:-mcpu=apple-m1>
     $<$<CONFIG:Debug>:-fsanitize=address,undefined -fno-omit-frame-pointer>)
     #$<$<CONFIG:Debug>:-fno-omit-frame-pointer>)
 target_link_options(dive PRIVATE 

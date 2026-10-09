@@ -67,6 +67,9 @@ struct World {
     // View radius, x == z, y is the height of the cylinder
     int3 view_radius;
 
+    // Shared index buffer across all chunks
+    sg_buffer index_buffer;
+
     // Tracks and limits how many chunks are processed in a frame
     struct {
         u32 count, max;

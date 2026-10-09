@@ -103,11 +103,8 @@ enum VoxelType {
 struct MeshBuffer {
     u32 vertex_count;
 
-    u32 index_count;
-
     sg_view vbuf_view;
     sg_buffer vbuf;
-    sg_buffer ibuf;
 };
 
 struct Chunk {
@@ -133,7 +130,7 @@ struct Chunk {
 void chunk_init(struct Chunk *chunk, int3 chunk_pos);
 void chunk_set_block(struct Chunk *chunk, int3 local_pos, enum VoxelType id);
 void chunk_mesh(struct Chunk *chunk, const struct Chunk *neighbors[6]);
-void chunk_render(const struct Chunk *chunk, double3 cam_pos);
+void chunk_render(const struct Chunk *chunk, sg_buffer ibuf, double3 cam_pos);
 void chunk_reset(struct Chunk *chunk);
 void chunk_destroy(struct Chunk *chunk);
 

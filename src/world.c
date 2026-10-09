@@ -1,6 +1,30 @@
 #include "world.h"
 #include <stdlib.h>
 
+
+static void build_ibuf(struct World *world) {
+    const u32 face_indices[] = { 0, 1, 2,  0, 2, 3 };
+    u32 quad_count = CHUNK_VOLUME * 3;
+
+    u32 *temp_index_buffer = malloc(sizeof(u32) * quad_count * 6);
+
+    for (u32 q = 0; q < quad_count; q++) {
+        u32 base = q * 4;
+        for (u32 i = 0; i < 6; i++) {
+            temp_index_buffer[q * 6 + i] = base + face_indices[i];
+        }
+    }
+
+    world->index_buffer = sg_make_buffer(&(sg_buffer_desc) {
+        .usage.index_buffer = true,
+        .data = {
+            .ptr = temp_index_buffer,
+            .size = sizeof(u32) * quad_count * 6
+        }
+    });
+    free(temp_index_buffer);
+}
+
 static void generate_terrain(struct Chunk *chunk) {
     if (chunk->position.y > 1) {
         memset(chunk->data, 0, sizeof(u8) * CHUNK_VOLUME/2);
@@ -100,6 +124,8 @@ void world_init(struct World *world) {
     world->mesh_limits.max = 1;
     world->mesh_limits.count = 0;
 
+    build_ibuf(world);
+
     build_offsets(world);
 
     world_recenter(world);
@@ -141,7 +167,7 @@ void world_render(struct World *world, double3 camera_pos) {
         if (cx == NULL) { continue; }
 
         if (cx->flags.initialized && cx->flags.meshed)
-            chunk_render(cx, camera_pos);
+            chunk_render(cx, world->index_buffer, camera_pos);
     }
 }
 
@@ -152,6 +178,7 @@ void world_destroy(struct World *world) {
         free(world->chunks[c]);
         world->chunks[c] = NULL;
     }
+    sg_destroy_buffer(world->index_buffer);
     free(world->chunks);
     free(world->offsets);
     world->chunk_count = 0;

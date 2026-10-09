@@ -40,7 +40,6 @@ static void scratch_push_ind(u32 i) {
     scratch.i_data[scratch.i_n++] = i;
 }
 
-static const u32 face_indices[] = { 0, 1, 2,  0, 2, 3 };
 static const int3 face_vertex_mask[] = {
     { 0, 0, 1 },  // front
     { 0, 0, 0 },  // back
@@ -63,7 +62,6 @@ static u64 pack_quad(int3 p, u8 width, u8 height, u8 dir, u16 data) {
 static void mesh_release(struct MeshBuffer *mesh) {
     sg_destroy_view(mesh->vbuf_view);
     sg_destroy_buffer(mesh->vbuf);
-    sg_destroy_buffer(mesh->ibuf);
     *mesh = (struct MeshBuffer){0};
 }
 
@@ -117,7 +115,6 @@ void chunk_mesh(struct Chunk *chunk, const struct Chunk *neighbors[6]) {
     chunk->flags.meshing = true;
     mesh_release(&chunk->mesh);
 
-    scratch.i_n = 0;
     scratch.v_n = 0;
     for (size_t vox = 0; vox < CHUNK_VOLUME; vox++) {
         if (chunk->data[vox] == AIR)
@@ -128,14 +125,8 @@ void chunk_mesh(struct Chunk *chunk, const struct Chunk *neighbors[6]) {
             if (!face_exposed(chunk, neighbors, local_pos, dir))
                 continue;
 
-            u32 base_index = scratch.v_n * 4;
-
             u64 quad = pack_quad(local_pos + face_vertex_mask[dir], 1, 1, dir, chunk->data[vox]);
             scratch_push_vert(quad);
-
-            for (u32 idx = 0; idx < 6; idx++) {
-                scratch_push_ind(base_index + face_indices[idx]);
-            }
         }
     }
 
@@ -148,7 +139,6 @@ void chunk_mesh(struct Chunk *chunk, const struct Chunk *neighbors[6]) {
     }
 
     chunk->mesh.vertex_count = scratch.v_n;
-    chunk->mesh.index_count = scratch.i_n;
 
     chunk->mesh.vbuf = sg_make_buffer(&(sg_buffer_desc) {
         .usage.storage_buffer = true,
@@ -161,24 +151,16 @@ void chunk_mesh(struct Chunk *chunk, const struct Chunk *neighbors[6]) {
     chunk->mesh.vbuf_view = sg_make_view(&(sg_view_desc) {
         .storage_buffer.buffer = chunk->mesh.vbuf,
     });
-
-    chunk->mesh.ibuf = sg_make_buffer(&(sg_buffer_desc) {
-        .usage.index_buffer = true,
-        .data = { 
-            .ptr = scratch.i_data, 
-            .size = scratch.i_n * sizeof(u32)
-        }
-    });
     
     chunk->flags.meshing = false;
     chunk->flags.dirty = false;
     chunk->flags.meshed = true;
 }
 
-void chunk_render(const struct Chunk *chunk, double3 cam_pos) {
+void chunk_render(const struct Chunk *chunk, sg_buffer ibuf, double3 cam_pos) {
     assert(chunk);
     assert(chunk->flags.meshed);
-    if (chunk->mesh.index_count == 0) return;
+    if (chunk->mesh.vertex_count == 0) return;
 
     double3 chunk_pos = voxel_to_world(chunk_to_voxel(chunk->position));
     double3 rel_pos_d = chunk_pos - cam_pos;
@@ -188,12 +170,12 @@ void chunk_render(const struct Chunk *chunk, double3 cam_pos) {
     simd_float4x4 model_mat = simd_mul(mat_translation(rel_pos), mat_scale(scale));
 
     sg_apply_bindings(&(sg_bindings){
-        .index_buffer = chunk->mesh.ibuf,
+        .index_buffer = ibuf,
         .views[0] = chunk->mesh.vbuf_view
     });
     // view and proj mats are applied in the begin_pass function
     sg_apply_uniforms(1, &SG_RANGE(model_mat));
-    sg_draw(0, chunk->mesh.index_count, 1);
+    sg_draw(0, chunk->mesh.vertex_count * 6, 1);
 }
 
 void chunk_reset(struct Chunk *chunk) {
@@ -204,7 +186,6 @@ void chunk_reset(struct Chunk *chunk) {
     chunk->flags.dirty = false;
     chunk->position = simd_make_int3(0, 0, 0);
 
-    chunk->mesh.index_count = 0;
     chunk->mesh.vertex_count = 0;
     mesh_release(&chunk->mesh);
     memset(chunk->data, 0, sizeof(u8) * CHUNK_VOLUME);
@@ -214,10 +195,8 @@ void chunk_destroy(struct Chunk *chunk) {
     assert(chunk);
     free(chunk->data);
 
-    chunk->mesh.index_count = 0;
     chunk->mesh.vertex_count = 0;
     sg_destroy_buffer(chunk->mesh.vbuf);
-    sg_destroy_buffer(chunk->mesh.ibuf);
     sg_destroy_view(chunk->mesh.vbuf_view);
 
     memset(chunk, 0, sizeof(struct Chunk));
