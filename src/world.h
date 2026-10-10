@@ -32,6 +32,7 @@
 #define WORLD_SHIFT simd_make_int3(__builtin_ctz(WORLD_SIZE_X), __builtin_ctz(WORLD_SIZE_Y), __builtin_ctz(WORLD_SIZE_Z))
 #define WORLD_DIM simd_make_int3(WORLD_SIZE_X, WORLD_SIZE_Y, WORLD_SIZE_Z)
 
+#define WORLD_VIEW_RAD (WORLD_DIM/2 - 1)
 #define WORLD_VOLUME (WORLD_SIZE_X * WORLD_SIZE_Y * WORLD_SIZE_Z)
 
 // abs pos in chunks -> index into world's chunk array
@@ -48,6 +49,12 @@ static inline int3 world_index_to_chunk(u32 idx, int3 world_pos) {
         (i32)(idx >> (WORLD_SHIFT.x + WORLD_SHIFT.y))
     ); 
     return world_pos + ((s - world_pos) & WORLD_MASK);
+}
+
+static inline bool offset_in_view(int3 offset) {
+    int xz_len = offset.x * offset.x + offset.z * offset.z;
+    int xz_rad2 = WORLD_VIEW_RAD.x * (WORLD_VIEW_RAD.z + 1);
+    return xz_len <= xz_rad2 && abs(offset.y) <= WORLD_VIEW_RAD.y;
 }
 
 struct World {

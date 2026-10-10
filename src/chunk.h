@@ -121,6 +121,7 @@ struct Chunk {
         bool initialized: 1;
         bool meshing: 1;
         bool meshed: 1;
+        bool empty: 1;
         bool dirty: 1;
     } flags;
 

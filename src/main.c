@@ -47,7 +47,7 @@ static void frame() {
     player_update(&state.player, &state.camera, &state.input);
     camera_update(&state.camera, &state.player, &state.input);
     world_update(&state.world, &state.player);
-    // debug_update(&state.debug, &state.input);
+    // debug_update(&state.debug, &state.input, &state.player, &state.world);
 
     renderer_begin_pass(&state.renderer, &state.camera);
     world_render(&state.world, state.camera.pos);
@@ -78,8 +78,8 @@ sapp_desc sokol_main(int argc, char* argv[]) {
         .frame_cb = frame,
         .cleanup_cb = cleanup,
         .event_cb = input,
-        .width = 1024,
-        .height = 768,
+        .width = 1278,
+        .height = 912,
         .window_title = "dive",
         .icon.sokol_default = true,
         .enable_clipboard = true,
@@ -90,5 +90,4 @@ sapp_desc sokol_main(int argc, char* argv[]) {
  * TODO:
  *  - Add physics
  *  - textures
- *  - chunk streaming
  * */

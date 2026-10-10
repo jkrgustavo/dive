@@ -63,6 +63,7 @@ static void mesh_release(struct MeshBuffer *mesh) {
     sg_destroy_view(mesh->vbuf_view);
     sg_destroy_buffer(mesh->vbuf);
     *mesh = (struct MeshBuffer){0};
+    mesh->vertex_count = 0;
 }
 
 // Takes in this chunk's world position in chunks
@@ -75,11 +76,13 @@ void chunk_init(struct Chunk *chunk, int3 chunk_pos) {
         chunk->data = data;
     }
 
+    // init flag set after terrain gen
     chunk->position = chunk_pos;
-    chunk->flags.initialized = true;
     chunk->flags.meshing = false;
     chunk->flags.meshed = false;
+    chunk->flags.empty = false;
     chunk->flags.dirty = false;
+    chunk->flags.initialized = true;
 }
 
 void chunk_set_block(struct Chunk *chunk, int3 local_pos, enum VoxelType id) {
@@ -95,13 +98,12 @@ bool face_exposed(struct Chunk *chunk, const struct Chunk *neighbors[6], int3 lo
     if (!voxel_in_chunk(neighbor_pos)) {
         const struct Chunk *neighbor_chunk = neighbors[dir];
 
-        if (neighbor_chunk == NULL) return true;
-        if (!neighbor_chunk->flags.initialized) return true;
+        if (neighbor_chunk == NULL || !neighbor_chunk->flags.initialized) return false;
 
         int3 neighbor_pos_abs = local_to_voxel(local_pos + dir_offset[dir], chunk->position);
         u32 neighbor_vox_idx = local_to_chunk_index(voxel_to_local(neighbor_pos_abs));
         
-        return neighbor_chunk->data[neighbor_vox_idx] == AIR;
+        return (neighbor_chunk->flags.empty || neighbor_chunk->data[neighbor_vox_idx] == AIR);
     } else {
         return chunk->data[local_to_chunk_index(neighbor_pos)] == AIR;
     }
@@ -109,16 +111,18 @@ bool face_exposed(struct Chunk *chunk, const struct Chunk *neighbors[6], int3 lo
 
 void chunk_mesh(struct Chunk *chunk, const struct Chunk *neighbors[6]) {
     assert(chunk && chunk->flags.initialized && !chunk->flags.meshing);
-    if (chunk->flags.meshed && !chunk->flags.dirty)
+    if ((chunk->flags.meshed && !chunk->flags.dirty) || chunk->flags.empty)
         return;
 
     chunk->flags.meshing = true;
     mesh_release(&chunk->mesh);
 
+    bool solid = false;
     scratch.v_n = 0;
     for (size_t vox = 0; vox < CHUNK_VOLUME; vox++) {
         if (chunk->data[vox] == AIR)
             continue;
+        solid = true;
 
         int3 local_pos = chunk_index_to_local(vox);
         for (u32 dir = 0; dir < 6; dir++) {
@@ -130,15 +134,19 @@ void chunk_mesh(struct Chunk *chunk, const struct Chunk *neighbors[6]) {
         }
     }
 
+    chunk->mesh.vertex_count = scratch.v_n;
+
     if (scratch.v_n == 0) {
-        mesh_release(&chunk->mesh);
+        chunk->flags.empty = !solid;
+        if (chunk->flags.empty) {
+            free(chunk->data);
+            chunk->data = NULL;
+        }
         chunk->flags.meshing = false;
         chunk->flags.dirty = false;
         chunk->flags.meshed = true;
         return;
     }
-
-    chunk->mesh.vertex_count = scratch.v_n;
 
     chunk->mesh.vbuf = sg_make_buffer(&(sg_buffer_desc) {
         .usage.storage_buffer = true,
@@ -180,24 +188,25 @@ void chunk_render(const struct Chunk *chunk, sg_buffer ibuf, double3 cam_pos) {
 
 void chunk_reset(struct Chunk *chunk) {
     assert(chunk);
+    if (!chunk->flags.empty) {
+        mesh_release(&chunk->mesh);
+        memset(chunk->data, 0, sizeof(u8) * CHUNK_VOLUME);
+    }
+
     chunk->flags.initialized = false;
     chunk->flags.meshed = false;
     chunk->flags.meshing = false;
     chunk->flags.dirty = false;
+    chunk->flags.empty = false;
     chunk->position = simd_make_int3(0, 0, 0);
-
-    chunk->mesh.vertex_count = 0;
-    mesh_release(&chunk->mesh);
-    memset(chunk->data, 0, sizeof(u8) * CHUNK_VOLUME);
 }
 
 void chunk_destroy(struct Chunk *chunk) {
     assert(chunk);
-    free(chunk->data);
-
-    chunk->mesh.vertex_count = 0;
-    sg_destroy_buffer(chunk->mesh.vbuf);
-    sg_destroy_view(chunk->mesh.vbuf_view);
+    if (!chunk->flags.empty) {
+        mesh_release(&chunk->mesh);
+        free(chunk->data);
+    }
 
     memset(chunk, 0, sizeof(struct Chunk));
 }

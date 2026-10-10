@@ -26,8 +26,11 @@ static void build_ibuf(struct World *world) {
 }
 
 static void generate_terrain(struct Chunk *chunk) {
-    if (chunk->position.y > 1) {
-        memset(chunk->data, 0, sizeof(u8) * CHUNK_VOLUME/2);
+    if (chunk->position.y >= 1) {
+        memset(chunk->data, 0, sizeof(u8) * CHUNK_VOLUME);
+        return;
+    } else if (chunk->position.y < -1) {
+        memset(chunk->data, 1, sizeof(u8) * CHUNK_VOLUME);
         return;
     }
 
@@ -60,9 +63,7 @@ static void build_offsets(struct World *world) {
     u32 n = 0;
     for (u32 c = 0; c < WORLD_VOLUME; c++) {
         int3 off = world_index_to_chunk(c, world->position) - world->center;
-        if (off.x * off.x + off.z * off.z <= world->view_radius.x * (world->view_radius.z + 1)
-                && abs(off.y) <= world->view_radius.y
-        ) {
+        if (offset_in_view(off)) {
             offsets[n++] = off;
         }
     }
@@ -80,13 +81,16 @@ static void load_chunk(struct World *world, struct Chunk *cx, int3 chunk_pos) {
 
     for (u32 dir = 0; dir < 6; dir++) {
         struct Chunk *nc = world_get_chunk(world, cx->position + dir_offset[dir]);
-        if (nc != NULL) nc->flags.dirty = true;
+        if (nc != NULL && nc->flags.meshed && !nc->flags.empty) nc->flags.dirty = true;
     }
 
 }
 
 static void world_recenter(struct World *world) {
     for (u32 i = 0; i < world->offset_count; i++) {
+        if (world->load_limits.count >= world->load_limits.max) 
+            break;
+
         int3 chunk_pos = world->center + world->offsets[i];
         u32 cidx = chunk_to_world_index(chunk_pos);
         if (world->chunks[cidx] == NULL) { 
@@ -94,11 +98,9 @@ static void world_recenter(struct World *world) {
         }
 
         struct Chunk *cx = world->chunks[cidx];
+
         if (cx->flags.initialized && simd_all(cx->position == chunk_pos)) 
             continue;
-
-        if (world->load_limits.count >= world->load_limits.max) 
-            break;
 
         if (cx->flags.initialized)
             chunk_reset(cx);
@@ -115,35 +117,47 @@ void world_init(struct World *world) {
     world->position = -WORLD_DIM + (WORLD_DIM/2);
     world->center = world->position + (WORLD_DIM/2);
 
-    world->view_radius = WORLD_DIM/2 - 1;
+    world->view_radius = WORLD_VIEW_RAD;
 
     world->chunks = calloc(world->chunk_count, sizeof(struct Chunk*));
 
-    world->load_limits.max = 5;
+    // dont throttle chunks on startup
+    world->load_limits.max = 100;
+    world->mesh_limits.max = 10;
     world->load_limits.count = 0;
-    world->mesh_limits.max = 1;
     world->mesh_limits.count = 0;
 
     build_ibuf(world);
-
     build_offsets(world);
-
     world_recenter(world);
+
+    world->load_limits.max = 10;
 }
 
 static void world_mesh(struct World *world) {
+
     for (u32 i = 0; i < world->offset_count; i++) {
+        if (world->mesh_limits.count >= world->mesh_limits.max)
+            break;
+
         struct Chunk *cx = world_get_chunk(world, world->center + world->offsets[i]);
-        if (cx == NULL) continue;
+        if (cx == NULL || cx->flags.empty) continue;
 
-
-        if ((!cx->flags.meshed || cx->flags.dirty) 
-            && (world->mesh_limits.count < world->mesh_limits.max)
-        ) {
+        if (!cx->flags.meshed || cx->flags.dirty) {
             const struct Chunk *neighbors[6];
+            bool neighbor_loading = false;
+
             for (u32 dir = 0; dir < 6; dir++) {
-                neighbors[dir] = world_get_chunk(world, cx->position + dir_offset[dir]);
+                int3 neighbor_pos = cx->position + dir_offset[dir];
+                neighbors[dir] = world_get_chunk(world, neighbor_pos);
+
+                if (neighbors[dir] == NULL && offset_in_view(neighbor_pos - world->center))
+                    neighbor_loading = true;
+                
             }
+
+            if (neighbor_loading) continue;
+
             chunk_mesh(cx, neighbors);
             world->mesh_limits.count++;
         }
