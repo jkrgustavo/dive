@@ -29,6 +29,8 @@
  * lives in the MeshBuffer.
  */
 
+#define VOXEL_SIZE 0.25
+
 #define CHUNK_DIMENSION_X 32
 #define CHUNK_DIMENSION_Y 32
 #define CHUNK_DIMENSION_Z 32
@@ -66,10 +68,10 @@ static inline int3 chunk_index_to_local(const u32 idx) {
 }
 
 // convert continuous world coords to voxels
-static inline int3 world_to_voxel(const double3 coord) { return simd_int_sat(floor(coord)); }
+static inline int3 world_to_voxel(const double3 coord) { return simd_int_sat(floor(coord / VOXEL_SIZE)); }
 
 // convert voxels to world coords
-static inline double3 voxel_to_world(const int3 world_vox_pos) { return simd_double(world_vox_pos); }
+static inline double3 voxel_to_world(const int3 world_vox_pos) { return simd_double(world_vox_pos) * VOXEL_SIZE; }
 
 
 // takes a local voxel pos and checks 

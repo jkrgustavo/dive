@@ -173,7 +173,7 @@ void chunk_render(const struct Chunk *chunk, sg_buffer ibuf, double3 cam_pos) {
     double3 chunk_pos = voxel_to_world(chunk_to_voxel(chunk->position));
     double3 rel_pos_d = chunk_pos - cam_pos;
     float3 rel_pos = simd_float(rel_pos_d);
-    float3 scale = simd_make_float3(1.0, 1.0, 1.0);
+    float3 scale = simd_make_float3(VOXEL_SIZE, VOXEL_SIZE, VOXEL_SIZE);
 
     simd_float4x4 model_mat = simd_mul(mat_translation(rel_pos), mat_scale(scale));
 

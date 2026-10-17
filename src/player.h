@@ -8,12 +8,12 @@ struct Player {
     // Player's position in the world
     double3 position;
 
-    // Speed in voxels
+    // Speed in meters
     double3 movespeed;
 
     f32 mouse_sensitivity;
 
-    // Height in voxels, camera at the top
+    // Height in meters, camera at the top
     u8 height;
 
     struct {
