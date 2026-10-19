@@ -82,6 +82,12 @@ struct World {
         u32 count, max;
     } load_limits, mesh_limits;
 
+    // Color palette
+    struct {
+        sg_buffer palette_buf;
+        sg_view palette_view;
+    } palette;
+
     // array of chunks that are currently loaded
     struct Chunk **chunks;
 };

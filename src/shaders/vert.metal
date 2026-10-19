@@ -8,20 +8,19 @@ struct mats {
 
 struct vs_out {
     float4 position [[position]];
-    float4 color;
+    float3 local_pos;       // chunk_local, in voxels
+    float3 normal [[flat]]; // face dir, const across the quad
 };
 
 
-static float3 hash_color(uint n) {
-    n = (n ^ 61u) ^ (n >> 16);
-    n *= 9u;
-    n = n ^ (n >> 4);
-    n *= 0x27d4eb2du;
-    n = n ^ (n >> 15);
-    return float3(float( n        & 255u),
-                  float((n >>  8) & 255u),
-                  float((n >> 16) & 255u)) / 255.0;
-}
+constant float3 dir_offset[] = {
+    {  0,  0,  1 }, // front +z
+    {  0,  0, -1 }, // back  -z
+    {  1,  0,  0 }, // left  +x
+    { -1,  0,  0 }, // right -x
+    {  0,  1,  0 }, // up    +y
+    {  0, -1,  0 }, // down  -y
+};
 
 // front (+z), back (-z), left (+x), right (-x), up (+y), down (-y)
 constant float3 corners[6][4] = {
@@ -45,9 +44,11 @@ vertex vs_out _main(
     uint64_t q = quads[face];
     float3 pos = float3(uint3(q & 63u, (q>>6) & 63u, (q>>12) & 63u));
     uint dir = uint((q>>30) & 7u);
+    float3 corner_val = corners[dir][corner];
 
     vs_out out;
-    out.position = view_proj_mat * model_mat * float4(pos + corners[dir][corner], 1.0);
-    out.color = float4(hash_color(vid), 1.0);
+    out.position = view_proj_mat * model_mat * float4(pos + corner_val, 1.0);
+    out.local_pos = pos + corner_val;
+    out.normal = dir_offset[dir];
     return out;
 }

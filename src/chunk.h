@@ -21,8 +21,7 @@
  *  | width  - 6
  *  | height - 6
  *  | dir    - 3
- *  | vox ID - 16
- *  | pad    - 15
+ *  | reserved - 31
  *
  * Pos refers to the local coords within a chunk.
  * Fits inside a single u64, unpack inside vertex shader, and
@@ -97,9 +96,14 @@ static const int3 dir_offset[] = {
     {  0, -1,  0 }, // down  -y
 };
 
-enum VoxelType {
+enum VoxelColor {
     AIR = 0,
-    SOLID = 1
+    RED,
+    ORANGE,
+    YELLOW,
+    GREEN,
+    BLUE,
+    PURPLE,
 };
 
 struct MeshBuffer {
@@ -107,13 +111,17 @@ struct MeshBuffer {
 
     sg_view vbuf_view;
     sg_buffer vbuf;
+
+    sg_view databuf_view;
+    sg_buffer databuf;
 };
 
 struct Chunk {
     // world position in chunks
     int3 position;
 
-    // array of voxel data for this chunk
+    // array of voxel data for this chunk.
+    // data is an index into a color palette [0, 255]
     u8 *data;
 
     struct MeshBuffer mesh;
@@ -131,9 +139,9 @@ struct Chunk {
 
 
 void chunk_init(struct Chunk *chunk, int3 chunk_pos);
-void chunk_set_block(struct Chunk *chunk, int3 local_pos, enum VoxelType id);
+void chunk_set_block(struct Chunk *chunk, int3 local_pos, enum VoxelColor id);
 void chunk_mesh(struct Chunk *chunk, const struct Chunk *neighbors[6]);
-void chunk_render(const struct Chunk *chunk, sg_buffer ibuf, double3 cam_pos);
+void chunk_render(const struct Chunk *chunk, sg_buffer ibuf, sg_view palette, double3 cam_pos);
 void chunk_reset(struct Chunk *chunk);
 void chunk_destroy(struct Chunk *chunk);
 

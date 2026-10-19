@@ -34,6 +34,16 @@ void renderer_init(struct Renderer *renderer) {
             .stage = SG_SHADERSTAGE_VERTEX,
             .readonly = true,
             .msl_buffer_n = 8
+        },
+        .views[1].storage_buffer = {
+            .stage = SG_SHADERSTAGE_FRAGMENT,
+            .readonly = true,
+            .msl_buffer_n = 8
+        },
+        .views[2].storage_buffer = {
+            .stage = SG_SHADERSTAGE_FRAGMENT,
+            .readonly = true,
+            .msl_buffer_n = 9
         }
     });
 

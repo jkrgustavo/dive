@@ -25,6 +25,24 @@ static void build_ibuf(struct World *world) {
     free(temp_index_buffer);
 }
 
+static void build_palette(struct World *world) {
+    u32 palette[256] = {0};
+    palette[RED] = 0xFF0000FF;
+    palette[ORANGE] = 0xFF0099FF;
+    palette[YELLOW] = 0xFF00FFFF;
+    palette[GREEN] = 0xFF00FF00;
+    palette[BLUE] = 0xFFFF0000;
+    palette[PURPLE] = 0xFFFF00FF;
+
+    world->palette.palette_buf = sg_make_buffer(&(sg_buffer_desc) {
+        .data = SG_RANGE(palette),
+        .usage.storage_buffer = true
+    });
+    world->palette.palette_view = sg_make_view(&(sg_view_desc) {
+        .storage_buffer.buffer = world->palette.palette_buf
+    });
+}
+
 static void generate_terrain(struct Chunk *chunk) {
     if (chunk->position.y >= 1) {
         memset(chunk->data, 0, sizeof(u8) * CHUNK_VOLUME);
@@ -39,7 +57,7 @@ static void generate_terrain(struct Chunk *chunk) {
         int3 pos_w = local_to_voxel(chunk_index_to_local(v), chunk->position);
         ground_height = sin(pos_w.x / 2.5) * 3;
         if (pos_w.y < ground_height) {
-            chunk->data[v] = SOLID;
+            chunk->data[v] = GREEN;
         } else {
             chunk->data[v] = AIR;
         }
@@ -128,6 +146,7 @@ void world_init(struct World *world) {
     world->mesh_limits.count = 0;
 
     build_ibuf(world);
+    build_palette(world);
     build_offsets(world);
     world_recenter(world);
 
@@ -181,7 +200,7 @@ void world_render(struct World *world, double3 camera_pos) {
         if (cx == NULL) { continue; }
 
         if (cx->flags.initialized && cx->flags.meshed)
-            chunk_render(cx, world->index_buffer, camera_pos);
+            chunk_render(cx, world->index_buffer, world->palette.palette_view, camera_pos);
     }
 }
 
@@ -193,6 +212,8 @@ void world_destroy(struct World *world) {
         world->chunks[c] = NULL;
     }
     sg_destroy_buffer(world->index_buffer);
+    sg_destroy_view(world->palette.palette_view);
+    sg_destroy_buffer(world->palette.palette_buf);
     free(world->chunks);
     free(world->offsets);
     world->chunk_count = 0;
