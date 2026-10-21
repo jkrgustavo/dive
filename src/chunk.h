@@ -28,7 +28,7 @@
  * lives in the MeshBuffer.
  */
 
-#define VOXEL_SIZE 0.25
+#define VOXEL_SIZE 0.1
 
 #define CHUNK_DIMENSION_X 32
 #define CHUNK_DIMENSION_Y 32
@@ -74,7 +74,7 @@ static inline double3 voxel_to_world(const int3 world_vox_pos) { return simd_dou
 
 
 // takes a local voxel pos and checks 
-static inline bool voxel_in_chunk(int3 local_pos) {
+static inline bool voxel_in_chunk(const int3 local_pos) {
     return simd_all(local_pos >= 0) && simd_all(local_pos < CHUNK_DIM);
 }
 
@@ -104,6 +104,7 @@ enum VoxelColor {
     GREEN,
     BLUE,
     PURPLE,
+    GREY
 };
 
 struct MeshBuffer {

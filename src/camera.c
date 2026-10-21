@@ -4,13 +4,17 @@
 #define PITCH_LIMIT radians(89.0f)
 
 void camera_init(struct Camera *cam, const struct Player *player, f32 fovy, f32 near, f32 far) {
-    cam->pos    = player->position;
     cam->pitch  = 0.0f;
     cam->yaw    = PI;
     cam->near   = near;
     cam->far    = far;
     cam->fovy   = fovy;
     cam->aspect = sapp_widthf() / sapp_heightf();
+    cam->pos = simd_make_double3(
+        player->position.x+(player->size.x/2.0), 
+        player->position.y+player->size.y, 
+        player->position.z+(player->size.z/2.0)
+    );
 
     cam->view = mat_view_dir(derive_forward(cam->pitch, cam->yaw), simd_make_float3(0.0f, 1.0f, 0.0f));
     cam->proj = mat_proj(cam->fovy, cam->aspect, cam->near);
@@ -28,7 +32,11 @@ static void update_mouse_movement(struct Camera *cam, const struct Input *input,
 void camera_update(struct Camera *cam, const struct Player *player, const struct Input *input) {
     update_mouse_movement(cam, input, player->mouse_sensitivity);
 
-    cam->pos = player->position;
+    cam->pos = simd_make_double3(
+        player->position.x+(player->size.x/2.0), 
+        player->position.y+player->size.y, 
+        player->position.z+(player->size.z/2.0)
+    );
 
     cam->aspect = sapp_widthf() / sapp_heightf();
     cam->proj = mat_proj(cam->fovy, cam->aspect, cam->near);

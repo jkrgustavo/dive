@@ -17,6 +17,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
 
 typedef uint8_t u8;
 typedef uint16_t u16;
@@ -39,6 +40,14 @@ typedef simd_double2 double2;
 typedef simd_double3 double3;
 typedef simd_double4 double4;
 
+typedef simd_char2 char2;
+typedef simd_char3 char3;
+typedef simd_char4 char4;
+
+typedef simd_uchar2 uchar2;
+typedef simd_uchar3 uchar3;
+typedef simd_uchar4 uchar4;
+
 typedef simd_int2 int2;
 typedef simd_int3 int3;
 typedef simd_int4 int4;
@@ -57,5 +66,18 @@ typedef simd_ulong4 ulong4;
 
 // Reads a file's contents into a malloc'ed buffer. User must free buffer
 char *read_file(const char* path);
+
+
+static inline i32 rand_range(i32 low, i32 high) {
+    return (rand() % (high - low + 1)) + low;
+}
+
+static inline f32 rand_norm() {
+    return (float)rand() / (float)RAND_MAX;
+}
+
+static inline f32 rand_range_float(f32 low, f32 high) {
+    return (rand_norm() * (high - low)) + low;
+}
 
 #endif /* UTIL_H */

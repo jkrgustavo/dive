@@ -33,6 +33,7 @@ static void build_palette(struct World *world) {
     palette[GREEN] = 0xFF00FF00;
     palette[BLUE] = 0xFFFF0000;
     palette[PURPLE] = 0xFFFF00FF;
+    palette[GREY] = 0xFFAAAAAA;
 
     world->palette.palette_buf = sg_make_buffer(&(sg_buffer_desc) {
         .data = SG_RANGE(palette),
@@ -53,11 +54,14 @@ static void generate_terrain(struct Chunk *chunk) {
     }
 
     i32 ground_height = 0;
+    i32 grass_height = 1;
     for (u32 v = 0; v < CHUNK_VOLUME; v++) {
         int3 pos_w = local_to_voxel(chunk_index_to_local(v), chunk->position);
-        ground_height = sin(pos_w.x / 2.5) * 3;
-        if (pos_w.y < ground_height) {
+        ground_height = sin(pos_w.x / 10.0) * 6 * cos(pos_w.z / 8.0) + 1;
+        if (pos_w.y < ground_height && pos_w.y >= grass_height) {
             chunk->data[v] = GREEN;
+        } else if (pos_w.y < ground_height) {
+            chunk->data[v] = GREY;
         } else {
             chunk->data[v] = AIR;
         }
@@ -141,7 +145,7 @@ void world_init(struct World *world) {
 
     // dont throttle chunks on startup
     world->load_limits.max = 100;
-    world->mesh_limits.max = 10;
+    world->mesh_limits.max = 5;
     world->load_limits.count = 0;
     world->mesh_limits.count = 0;
 
@@ -150,7 +154,7 @@ void world_init(struct World *world) {
     build_offsets(world);
     world_recenter(world);
 
-    world->load_limits.max = 10;
+    world->load_limits.max = 5;
 }
 
 static void world_mesh(struct World *world) {
