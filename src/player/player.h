@@ -1,7 +1,7 @@
 #ifndef PLAYER_H
 #define PLAYER_H
 
-#include "util.h"
+#include "utils/util.h"
 #include "input.h"
 
 struct AABB { double3 min, max; };
@@ -26,8 +26,8 @@ struct Player {
     } flags;
 };
 
-#include "camera.h"
-#include "world.h"
+#include "gfx/camera.h"
+#include "world/world.h"
 
 void player_init(struct Player *player, double3 pos);
 void player_update(struct Player *player, const struct World *world, const struct Camera *cam, const struct Input *input);

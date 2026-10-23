@@ -1,7 +1,7 @@
 #ifndef CHUNK_H
 #define CHUNK_H
 
-#include "util.h"
+#include "utils/util.h"
 
 /* Types of coordinates:
  *  | World - double3 - unbounded

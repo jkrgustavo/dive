@@ -1,10 +1,10 @@
-#include "util.h"
-#include "render.h"
-#include "camera.h"
-#include "mat_math.h"
-#include "input.h"
-#include "world.h"
-#include "player.h"
+#include "utils/util.h"
+#include "gfx/render.h"
+#include "gfx/camera.h"
+#include "utils/mat_math.h"
+#include "player/input.h"
+#include "world/world.h"
+#include "player/player.h"
 // #include "debug.h"
 
 struct {

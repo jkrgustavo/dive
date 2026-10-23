@@ -1,7 +1,7 @@
 #ifndef INPUT_H
 #define INPUT_H
 
-#include "util.h"
+#include "utils/util.h"
 
 #define KEY_DOWN 0x01
 #define KEY_PRESSED 0x02

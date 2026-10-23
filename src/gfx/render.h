@@ -1,7 +1,7 @@
 #ifndef RENDER_H
 #define RENDER_H
 
-#include "util.h"
+#include "utils/util.h"
 #include "camera.h"
 
 struct Renderer {

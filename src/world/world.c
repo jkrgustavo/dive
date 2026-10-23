@@ -1,6 +1,4 @@
 #include "world.h"
-#include <stdlib.h>
-
 
 static void build_ibuf(struct World *world) {
     const u32 face_indices[] = { 0, 1, 2,  0, 2, 3 };

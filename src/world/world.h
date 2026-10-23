@@ -1,7 +1,7 @@
 #ifndef WORLD_H
 #define WORLD_H
 
-#include "util.h"
+#include "utils/util.h"
 #include "chunk.h"
 /* Types of coordinates:
  *  | World  - double3 - unbounded  - in meters
@@ -56,7 +56,7 @@ static inline bool offset_in_view(const int3 offset) {
     return xz_len <= xz_rad2 && abs(offset.y) <= WORLD_VIEW_RAD.y;
 }
 
-#include "player.h"
+#include "player/player.h"
 
 struct World {
     // Total number of chunks in the chunk array

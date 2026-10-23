@@ -1,6 +1,6 @@
 #include "player.h"
-#include "mat_math.h"
-#include "camera.h"
+#include "utils/mat_math.h"
+#include "gfx/camera.h"
 
 #define GRAVITY (5.0)
 #define COLLISION_EPS (1e-5)

@@ -2,8 +2,8 @@
 #define CAMERA_H
 
 
-#include "util.h"
-#include "input.h"
+#include "utils/util.h"
+#include "player/input.h"
 
 struct Camera {
     double3 pos;
@@ -12,7 +12,7 @@ struct Camera {
     simd_float4x4 view, proj;
 };
 
-#include "player.h"
+#include "player/player.h"
 
 void camera_init(struct Camera *cam, const struct Player *player, f32 fovy, f32 near, f32 far);
 void camera_update(struct Camera *cam, const struct Player *player, const struct Input *input);

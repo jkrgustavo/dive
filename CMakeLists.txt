@@ -22,7 +22,7 @@ target_link_libraries(sokol PUBLIC
     "-framework Metal")
 
 
-file(GLOB DIVE_SOURCES CONFIGURE_DEPENDS "src/*.c")
+file(GLOB_RECURSE DIVE_SOURCES CONFIGURE_DEPENDS "src/*.c")
 add_executable(dive ${DIVE_SOURCES})
 
 include(CheckIPOSupported)

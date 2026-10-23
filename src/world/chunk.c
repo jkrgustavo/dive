@@ -1,5 +1,5 @@
 #include "chunk.h"
-#include "mat_math.h"
+#include "utils/mat_math.h"
 
 // dynamic scratch to find the best buffer size for each chunk
 static struct {

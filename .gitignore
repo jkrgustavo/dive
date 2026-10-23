@@ -3,3 +3,5 @@ profile/
 compile_commands.json
 profile.sh
 collect.py
+**/.DS_Store
+src/debug.*
