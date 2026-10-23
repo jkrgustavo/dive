@@ -1,5 +1,5 @@
 #include "camera.h"
-#include "mat_math.h"
+#include "utils/mat_math.h"
 
 #define PITCH_LIMIT radians(89.0f)
 
