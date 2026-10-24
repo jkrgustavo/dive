@@ -1,3 +1,6 @@
 [submodule "lib/dcimgui"]
 	path = lib/dcimgui
 	url = https://github.com/floooh/dcimgui.git
+[submodule "lib/base"]
+	path = lib/base
+	url = git@github.com:jkrgustavo/base.git
