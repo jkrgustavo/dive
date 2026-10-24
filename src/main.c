@@ -86,8 +86,3 @@ sapp_desc sokol_main(int argc, char* argv[]) {
         .logger.func = slog_func,
     };
 }
-/*
- * TODO:
- *  - Add physics
- *  - textures
- * */

@@ -89,6 +89,9 @@ struct World {
         sg_view palette_view;
     } palette;
 
+    // temporary scratch data used when meshing
+    struct MeshScratch *scratch;
+
     // array of chunks that are currently loaded
     struct Chunk **chunks;
 };

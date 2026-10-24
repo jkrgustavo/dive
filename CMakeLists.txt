@@ -32,6 +32,7 @@ if(HAVE_IPO)
 endif()
 
 target_include_directories(dive PRIVATE src)
+target_include_directories(dive PRIVATE lib/base)
 target_compile_options(dive PRIVATE 
     -Wall -Wextra
     $<$<CONFIG:Release>:-mcpu=apple-m1>

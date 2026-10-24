@@ -1,4 +1,5 @@
 #include "world.h"
+#include <ba_buffer.h>
 
 static void build_ibuf(struct World *world) {
     const u32 face_indices[] = { 0, 1, 2,  0, 2, 3 };
@@ -32,6 +33,7 @@ static void build_palette(struct World *world) {
     palette[BLUE] = 0xFFFF0000;
     palette[PURPLE] = 0xFFFF00FF;
     palette[GREY] = 0xFFAAAAAA;
+    palette[INVALID] = palette[PURPLE];
 
     world->palette.palette_buf = sg_make_buffer(&(sg_buffer_desc) {
         .data = SG_RANGE(palette),
@@ -47,7 +49,7 @@ static void generate_terrain(struct Chunk *chunk) {
         memset(chunk->data, 0, sizeof(u8) * CHUNK_VOLUME);
         return;
     } else if (chunk->position.y < -1) {
-        memset(chunk->data, 1, sizeof(u8) * CHUNK_VOLUME);
+        memset(chunk->data, GREY, sizeof(u8) * CHUNK_VOLUME);
         return;
     }
 
@@ -99,8 +101,10 @@ static void load_chunk(struct World *world, struct Chunk *cx, int3 chunk_pos) {
     chunk_init(cx, chunk_pos);
     generate_terrain(cx);
 
-    for (u32 dir = 0; dir < 6; dir++) {
-        struct Chunk *nc = world_get_chunk(world, cx->position + dir_offset[dir]);
+    for (u32 i = 0; i < 27; i++) {
+        if (i == 13) continue;
+        int3 neighbor_pos = cx->position + simd_make_int3(i%3-1, (i/3)%3-1, i/9-1);
+        struct Chunk *nc = world_get_chunk(world, neighbor_pos);
         if (nc != NULL && nc->flags.meshed && !nc->flags.empty) nc->flags.dirty = true;
     }
 
@@ -141,6 +145,8 @@ void world_init(struct World *world) {
 
     world->chunks = calloc(world->chunk_count, sizeof(struct Chunk*));
 
+    world->scratch = calloc(1, sizeof(struct MeshScratch));
+
     // dont throttle chunks on startup
     world->load_limits.max = 100;
     world->mesh_limits.max = 5;
@@ -162,24 +168,24 @@ static void world_mesh(struct World *world) {
             break;
 
         struct Chunk *cx = world_get_chunk(world, world->center + world->offsets[i]);
-        if (cx == NULL || cx->flags.empty) continue;
+        if (!cx || cx->flags.empty) continue;
 
         if (!cx->flags.meshed || cx->flags.dirty) {
-            const struct Chunk *neighbors[6];
+
             bool neighbor_loading = false;
+            const struct Chunk *neighbors[27];
+            for (u32 i = 0; i < 27; i++) {
+                // 3x3x3 block around the chunk. idx 13 is the current chunk
+                int3 neighbor_pos = cx->position + simd_make_int3(i%3-1, (i/3)%3-1, i/9-1);
+                neighbors[i] = world_get_chunk(world, neighbor_pos);
 
-            for (u32 dir = 0; dir < 6; dir++) {
-                int3 neighbor_pos = cx->position + dir_offset[dir];
-                neighbors[dir] = world_get_chunk(world, neighbor_pos);
-
-                if (neighbors[dir] == NULL && offset_in_view(neighbor_pos - world->center))
+                if (!neighbors[i] && offset_in_view(neighbor_pos - world->center))
                     neighbor_loading = true;
-                
             }
 
             if (neighbor_loading) continue;
 
-            chunk_mesh(cx, neighbors);
+            chunk_mesh(cx, neighbors, world->scratch);
             world->mesh_limits.count++;
         }
 
@@ -218,6 +224,8 @@ void world_destroy(struct World *world) {
     sg_destroy_buffer(world->palette.palette_buf);
     free(world->chunks);
     free(world->offsets);
+    bs_buffer_free(&world->scratch->quads);
+    free(world->scratch);
     world->chunk_count = 0;
     world->offset_count = 0;
 }

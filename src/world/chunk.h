@@ -30,15 +30,15 @@
 
 #define VOXEL_SIZE 0.1
 
-#define CHUNK_DIMENSION_X 32
-#define CHUNK_DIMENSION_Y 32
-#define CHUNK_DIMENSION_Z 32
+#define CHUNK_DIM_X 32
+#define CHUNK_DIM_Y 32
+#define CHUNK_DIM_Z 32
 
-#define CHUNK_MASK simd_make_int3(CHUNK_DIMENSION_X-1, CHUNK_DIMENSION_Y-1, CHUNK_DIMENSION_Z-1)
-#define CHUNK_SHIFT simd_make_int3(__builtin_ctz(CHUNK_DIMENSION_X), __builtin_ctz(CHUNK_DIMENSION_Y), __builtin_ctz(CHUNK_DIMENSION_Z))
-#define CHUNK_DIM simd_make_int3(CHUNK_DIMENSION_X, CHUNK_DIMENSION_Y, CHUNK_DIMENSION_Z)
+#define CHUNK_MASK simd_make_int3(CHUNK_DIM_X-1, CHUNK_DIM_Y-1, CHUNK_DIM_Z-1)
+#define CHUNK_SHIFT simd_make_int3(__builtin_ctz(CHUNK_DIM_X), __builtin_ctz(CHUNK_DIM_Y), __builtin_ctz(CHUNK_DIM_Z))
+#define CHUNK_DIM simd_make_int3(CHUNK_DIM_X, CHUNK_DIM_Y, CHUNK_DIM_Z)
 
-#define CHUNK_VOLUME ((CHUNK_DIMENSION_X) * (CHUNK_DIMENSION_Y) * (CHUNK_DIMENSION_Z))
+#define CHUNK_VOLUME ((CHUNK_DIM_X) * (CHUNK_DIM_Y) * (CHUNK_DIM_Z))
 
 // absolute pos in chunks -> voxels
 static inline int3 chunk_to_voxel(const int3 chunk_pos) { return CHUNK_DIM * chunk_pos; }
@@ -54,7 +54,7 @@ static inline int3 local_to_voxel(const int3 local_pos, const int3 chunk_pos) { 
 
 // pos within a chunk -> index into chunk data
 static inline u32 local_to_chunk_index(const int3 local_pos) {
-    return (local_pos.x + (local_pos.y * CHUNK_DIMENSION_X) + (local_pos.z * (CHUNK_DIMENSION_X * CHUNK_DIMENSION_Y)));
+    return (local_pos.x + (local_pos.y * CHUNK_DIM_X) + (local_pos.z * (CHUNK_DIM_X * CHUNK_DIM_Y)));
 }
 
 // index into chunk data -> pos within a chunk
@@ -104,7 +104,19 @@ enum VoxelColor {
     GREEN,
     BLUE,
     PURPLE,
-    GREY
+    GREY,
+    INVALID = 255
+};
+
+struct MeshScratch {
+    // scratch bs_buffer for quad generation
+    struct QuadBuf {
+        u64 *items;
+        size_t count, capacity;
+    } quads;
+
+    // padded chunk data to be sent to the GPU
+    u8 padded_data[(CHUNK_DIM_X + 2) * (CHUNK_DIM_Y + 2) * (CHUNK_DIM_Z + 2)];
 };
 
 struct MeshBuffer {
@@ -113,8 +125,8 @@ struct MeshBuffer {
     sg_view vbuf_view;
     sg_buffer vbuf;
 
-    sg_view databuf_view;
-    sg_buffer databuf;
+    sg_view paddbuf_view;
+    sg_buffer paddbuf;
 };
 
 struct Chunk {
@@ -141,7 +153,7 @@ struct Chunk {
 
 void chunk_init(struct Chunk *chunk, int3 chunk_pos);
 void chunk_set_block(struct Chunk *chunk, int3 local_pos, enum VoxelColor id);
-void chunk_mesh(struct Chunk *chunk, const struct Chunk *neighbors[6]);
+void chunk_mesh(struct Chunk *chunk, const struct Chunk *neighbors[27], struct MeshScratch *scratch);
 void chunk_render(const struct Chunk *chunk, sg_buffer ibuf, sg_view palette, double3 cam_pos);
 void chunk_reset(struct Chunk *chunk);
 void chunk_destroy(struct Chunk *chunk);
