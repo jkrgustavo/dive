@@ -2,7 +2,6 @@
 #define RENDER_H
 
 #include "utils/util.h"
-#include "camera.h"
 
 struct Renderer {
     sg_pass_action pass_action;
@@ -13,7 +12,7 @@ struct Renderer {
 };
 
 void renderer_init(struct Renderer *renderer);
-void renderer_begin_pass(struct Renderer *renderer, const struct Camera *camera);
+void renderer_begin_pass(struct Renderer *renderer, simd_float4x4 cam_proj, simd_float4x4 cam_view);
 void renderer_end_pass();
 
 #endif /* RENDER_H */

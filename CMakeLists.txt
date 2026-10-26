@@ -15,12 +15,16 @@ add_subdirectory(lib/dcimgui EXCLUDE_FROM_ALL)
 
 add_library(sokol STATIC lib/sokol/sokol.m)
 target_include_directories(sokol PUBLIC lib/sokol)
-target_compile_options(sokol PRIVATE -fobjc-arc)
+target_compile_options(sokol PRIVATE -fobjc-arc -mcpu=apple-m1)
 target_link_libraries(sokol PUBLIC
     "-framework AppKit"
     "-framework QuartzCore"
     "-framework Metal")
 
+
+add_library(noise STATIC lib/noise/FastNoiseLite.c)
+target_include_directories(noise PUBLIC lib/noise)
+target_compile_options(noise PRIVATE -mcpu=apple-m1)
 
 file(GLOB_RECURSE DIVE_SOURCES CONFIGURE_DEPENDS "src/*.c")
 add_executable(dive ${DIVE_SOURCES})
@@ -41,4 +45,4 @@ target_compile_options(dive PRIVATE
 target_link_options(dive PRIVATE 
     $<$<CONFIG:Debug>:-fsanitize=address,undefined>)
     #$<$<CONFIG:Debug>:>)
-target_link_libraries(dive PRIVATE imgui-docking sokol)
+target_link_libraries(dive PRIVATE imgui-docking sokol noise)

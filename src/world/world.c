@@ -1,5 +1,7 @@
-#include "world.h"
 #include <ba_buffer.h>
+#include <tgmath.h>
+
+#include "world.h"
 
 static void build_ibuf(struct World *world) {
     const u32 face_indices[] = { 0, 1, 2,  0, 2, 3 };
@@ -44,21 +46,27 @@ static void build_palette(struct World *world) {
     });
 }
 
-static void generate_terrain(struct Chunk *chunk) {
-    if (chunk->position.y >= 1) {
+static void generate_terrain(struct Chunk *chunk, fnl_state *noise) {
+    if (chunk->position.y >= 2) {
         memset(chunk->data, 0, sizeof(u8) * CHUNK_VOLUME);
         return;
-    } else if (chunk->position.y < -1) {
+    } else if (chunk->position.y < -2) {
         memset(chunk->data, GREY, sizeof(u8) * CHUNK_VOLUME);
         return;
     }
 
-    i32 ground_height = 0;
-    i32 grass_height = 1;
+    f32 ground_height = 0;
+    i32 grass_height = -1;
     for (u32 v = 0; v < CHUNK_VOLUME; v++) {
         int3 pos_w = local_to_voxel(chunk_index_to_local(v), chunk->position);
-        ground_height = sin(pos_w.x / 10.0) * 6 * cos(pos_w.z / 8.0) + 1;
-        if (pos_w.y < ground_height && pos_w.y >= grass_height) {
+
+        noise->frequency = 0.0005;
+        f32 mount = fnlGetNoise2D(noise, pos_w.x, pos_w.z) / 2 + 1.0;
+        noise->frequency = 0.005;
+        f32 terr = fnlGetNoise2D(noise, pos_w.x, pos_w.z);
+
+        ground_height = (exp(terr) * (mount * 5.0)) * (terr * 10) + terr;
+        if (pos_w.y <= ground_height && pos_w.y > floor(ground_height) - 1 && pos_w.y < grass_height) {
             chunk->data[v] = GREEN;
         } else if (pos_w.y < ground_height) {
             chunk->data[v] = GREY;
@@ -99,8 +107,9 @@ static void build_offsets(struct World *world) {
 
 static void load_chunk(struct World *world, struct Chunk *cx, int3 chunk_pos) {
     chunk_init(cx, chunk_pos);
-    generate_terrain(cx);
+    generate_terrain(cx, &world->noise);
 
+    // mark any neighbor chunks in a 3x3x3 grid that are meshed as dirty
     for (u32 i = 0; i < 27; i++) {
         if (i == 13) continue;
         int3 neighbor_pos = cx->position + simd_make_int3(i%3-1, (i/3)%3-1, i/9-1);
@@ -153,6 +162,10 @@ void world_init(struct World *world) {
     world->load_limits.count = 0;
     world->mesh_limits.count = 0;
 
+    world->noise = fnlCreateState();
+    world->noise.seed = 42;
+    world->noise.noise_type = FNL_NOISE_OPENSIMPLEX2;
+
     build_ibuf(world);
     build_palette(world);
     build_offsets(world);
@@ -192,8 +205,8 @@ static void world_mesh(struct World *world) {
     }
 }
 
-void world_update(struct World *world, struct Player *player) {
-    world->center = voxel_to_chunk(world_to_voxel(player->position));
+void world_update(struct World *world, double3 player_pos) {
+    world->center = voxel_to_chunk(world_to_voxel(player_pos));
     world->position = world->center - WORLD_DIM/2;
     world->load_limits.count = 0;
     world->mesh_limits.count = 0;

@@ -20,14 +20,14 @@ static void init() {
     sg_setup(&(sg_desc){ 
         .environment = sglue_environment(), 
         .logger.func = slog_func, 
-        .buffer_pool_size = 512,
-        .view_pool_size = 512,
+        .buffer_pool_size = 2 * WORLD_VOLUME + 32,
+        .view_pool_size = 2 * WORLD_VOLUME + 32,
     });
     simgui_setup(&(simgui_desc_t){ .logger.func = slog_func });
     igGetIO()->ConfigFlags |= ImGuiConfigFlags_DockingEnable;
 
     input_init(&state.input);
-    player_init(&state.player, (double3){ 0.0, 1.0, 0.0 });
+    player_init(&state.player, (double3){ 0.0, 5.0, 0.0 });
     renderer_init(&state.renderer);
     camera_init(&state.camera, &state.player, radians(60.0), 0.01, 1000.0);
     world_init(&state.world);
@@ -44,12 +44,12 @@ static void frame() {
     });
     
     input_update(&state.input);
-    player_update(&state.player, &state.world, &state.camera, &state.input);
+    player_update(&state.player, &state.world, &state.input, state.camera.pitch, state.camera.yaw);
     camera_update(&state.camera, &state.player, &state.input);
-    world_update(&state.world, &state.player);
+    world_update(&state.world, state.player.position);
     // debug_update(&state.debug, &state.input, &state.player, &state.world);
 
-    renderer_begin_pass(&state.renderer, &state.camera);
+    renderer_begin_pass(&state.renderer, state.camera.proj, state.camera.view);
     world_render(&state.world, state.camera.pos);
     // debug_draw(&state.debug, &state.camera, &state.input, &state.world, &state.player);
     renderer_end_pass();

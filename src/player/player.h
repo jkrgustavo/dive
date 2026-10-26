@@ -4,6 +4,9 @@
 #include "utils/util.h"
 #include "input.h"
 
+// Forward declarations
+struct World;
+
 struct AABB { double3 min, max; };
 
 struct Player {
@@ -26,10 +29,8 @@ struct Player {
     } flags;
 };
 
-#include "gfx/camera.h"
-#include "world/world.h"
 
 void player_init(struct Player *player, double3 pos);
-void player_update(struct Player *player, const struct World *world, const struct Camera *cam, const struct Input *input);
+void player_update(struct Player *player, const struct World *world, const struct Input *input, f32 cam_pitch, f32 cam_yaw);
 
 #endif /* PLAYER_H */

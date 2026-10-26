@@ -65,10 +65,10 @@ void renderer_init(struct Renderer *renderer) {
     free(fs_buffer);
 }
 
-void renderer_begin_pass(struct Renderer *renderer, const struct Camera *camera) {
+void renderer_begin_pass(struct Renderer *renderer, simd_float4x4 cam_proj, simd_float4x4 cam_view) {
     sg_begin_pass(&(sg_pass){ .action = renderer->pass_action, .swapchain = sglue_swapchain() });
     sg_apply_pipeline(renderer->pipeline);
-    simd_float4x4 proj_view = simd_mul(camera->proj, camera->view);
+    simd_float4x4 proj_view = simd_mul(cam_proj, cam_view);
     sg_apply_uniforms(0, &SG_RANGE(proj_view));
 }
 

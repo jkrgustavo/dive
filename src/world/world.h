@@ -1,6 +1,8 @@
 #ifndef WORLD_H
 #define WORLD_H
 
+#include <FastNoiseLite.h>
+
 #include "utils/util.h"
 #include "chunk.h"
 /* Types of coordinates:
@@ -22,9 +24,9 @@
  * Offsets are based off the world center.
  */
 
-#define WORLD_SIZE_X 8
-#define WORLD_SIZE_Y 4
-#define WORLD_SIZE_Z 8
+#define WORLD_SIZE_X 16
+#define WORLD_SIZE_Y 8
+#define WORLD_SIZE_Z 16
 
 #define WORLD_MASK simd_make_int3(WORLD_SIZE_X-1, WORLD_SIZE_Y-1, WORLD_SIZE_Z-1)
 #define WORLD_SHIFT simd_make_int3(__builtin_ctz(WORLD_SIZE_X), __builtin_ctz(WORLD_SIZE_Y), __builtin_ctz(WORLD_SIZE_Z))
@@ -32,7 +34,6 @@
 
 #define WORLD_VIEW_RAD (WORLD_DIM/2 - 1)
 #define WORLD_VOLUME (WORLD_SIZE_X * WORLD_SIZE_Y * WORLD_SIZE_Z)
-
 
 // abs pos in chunks -> index into world's chunk array
 static inline u32 chunk_to_world_index(const int3 chunk_pos) {
@@ -56,7 +57,6 @@ static inline bool offset_in_view(const int3 offset) {
     return xz_len <= xz_rad2 && abs(offset.y) <= WORLD_VIEW_RAD.y;
 }
 
-#include "player/player.h"
 
 struct World {
     // Total number of chunks in the chunk array
@@ -78,6 +78,12 @@ struct World {
     // Shared index buffer across all chunks
     sg_buffer index_buffer;
 
+    // FastNoiseLite state struct
+    fnl_state noise;
+
+    // temporary scratch data used when meshing
+    struct MeshScratch *scratch;
+
     // Tracks and limits how many chunks are processed in a frame
     struct {
         u32 count, max;
@@ -88,9 +94,6 @@ struct World {
         sg_buffer palette_buf;
         sg_view palette_view;
     } palette;
-
-    // temporary scratch data used when meshing
-    struct MeshScratch *scratch;
 
     // array of chunks that are currently loaded
     struct Chunk **chunks;
@@ -119,7 +122,7 @@ static inline bool world_solid_at(const struct World *world, const int3 vox_pos)
 }
 
 void world_init(struct World *world);
-void world_update(struct World *world, struct Player *player);
+void world_update(struct World *world, double3 player_pos);
 void world_render(struct World *world, double3 camera_pos);
 void world_destroy(struct World *world);
 

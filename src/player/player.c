@@ -1,6 +1,6 @@
 #include "player.h"
 #include "utils/mat_math.h"
-#include "gfx/camera.h"
+#include "world/world.h"
 
 #define GRAVITY (5.0)
 #define COLLISION_EPS (1e-5)
@@ -110,9 +110,9 @@ void player_init(struct Player *player, double3 pos) {
     player->position = pos;
     player->velocity = simd_make_double3(0.0, 0.0, 0.0);
 
-    player->movespeed = simd_make_double3(1.0, 1.0, 1.0);
-    player->sprintspeed = player->movespeed * 1.2;
-    player->jumpheight = simd_make_double3(0.0, 2.0, 0.0);
+    player->movespeed = simd_make_double3(1.2, 1.2, 1.2);
+    player->sprintspeed = player->movespeed * 1.5;
+    player->jumpheight = simd_make_double3(0.0, 2.5, 0.0);
     player->mouse_sensitivity = 0.005;
 
     player->size = simd_make_double3(0.15, 0.4, 0.15);
@@ -198,11 +198,11 @@ static void move(struct Player *player, const struct World *world, const struct 
     }
 }
 
-void player_update(struct Player *player, const struct World *world, const struct Camera *cam, const struct Input *input) {
+void player_update(struct Player *player, const struct World *world, const struct Input *input, f32 cam_pitch, f32 cam_yaw) {
     if (input_key_pressed(input, SAPP_KEYCODE_ESCAPE))
         sapp_request_quit();
 
     update_mouse_lock(input);
-    move(player, world, input, cam->pitch, cam->yaw);
+    move(player, world, input, cam_pitch, cam_yaw);
 
 }

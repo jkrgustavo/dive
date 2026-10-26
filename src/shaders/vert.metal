@@ -34,8 +34,8 @@ constant float3 corners[6][4] = {
 
 vertex vs_out _main(
     uint vid [[vertex_id]], 
-    constant float4x4& view_proj_mat [[buffer(0)]],
-    constant float4x4& model_mat [[buffer(1)]],
+    device const float4x4& view_proj_mat [[buffer(0)]],
+    device const float4x4& model_mat [[buffer(1)]],
     device const uint64_t* quads [[buffer(8)]] 
 ) {
     uint face = vid >> 2;
