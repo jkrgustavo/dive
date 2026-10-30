@@ -31,7 +31,7 @@ static void build_palette(struct World *world) {
     palette[RED] = 0xFF0000FF;
     palette[ORANGE] = 0xFF0099FF;
     palette[YELLOW] = 0xFF00FFFF;
-    palette[GREEN] = 0xFF00FF00;
+    palette[GREEN] = 0xFF33DD33;
     palette[BLUE] = 0xFFFF0000;
     palette[PURPLE] = 0xFFFF00FF;
     palette[GREY] = 0xFFAAAAAA;
@@ -55,26 +55,53 @@ static void generate_terrain(struct Chunk *chunk, fnl_state *noise) {
         return;
     }
 
-    f32 ground_height = 0;
-    i32 grass_height = -1;
-    for (u32 v = 0; v < CHUNK_VOLUME; v++) {
-        int3 pos_w = local_to_voxel(chunk_index_to_local(v), chunk->position);
+    // for (u32 v = 0; v < CHUNK_VOLUME; v++) {
+    for (u32 z = 0; z < CHUNK_DIM_Z; z++) {
+        for (u32 x = 0; x < CHUNK_DIM_X; x++) {
+            int3 pos_w = local_to_voxel(simd_make_int3(x, 0, z), chunk->position);
+                
+            noise->frequency = 0.0001;
+            f32 cont = fnlGetNoise2D(noise, pos_w.x, pos_w.z);
 
-        noise->frequency = 0.0005;
-        f32 mount = fnlGetNoise2D(noise, pos_w.x, pos_w.z) / 2 + 1.0;
-        noise->frequency = 0.005;
-        f32 terr = fnlGetNoise2D(noise, pos_w.x, pos_w.z);
+            noise->frequency = 0.01;
+            f32 mask = (fnlGetNoise2D(noise, pos_w.x, pos_w.z) + 1) / 2;
 
-        ground_height = (exp(terr) * (mount * 5.0)) * (terr * 10) + terr;
-        if (pos_w.y <= ground_height && pos_w.y > floor(ground_height) - 1 && pos_w.y < grass_height) {
-            chunk->data[v] = GREEN;
-        } else if (pos_w.y < ground_height) {
-            chunk->data[v] = GREY;
-        } else {
-            chunk->data[v] = AIR;
+            noise->frequency = 0.001;
+            noise->fractal_type = FNL_FRACTAL_RIDGED;
+            f32 ridge = (fnlGetNoise2D(noise, pos_w.x, pos_w.z) + 1) / 2;
+
+            noise->frequency = 0.05;
+            noise->octaves = 2;
+            noise->fractal_type = FNL_FRACTAL_FBM;
+            noise->noise_type = FNL_NOISE_OPENSIMPLEX2S;
+            f32 bumps = (fnlGetNoise2D(noise, pos_w.x, pos_w.z) + 1) / 2;
+
+            f32 combined = (int)(cont * 30 + mask * mask * ridge * 80 + bumps * 3);
+
+            i32 ground_height = combined;
+            f32 grass_height = ground_height - 1;
+
+            static int count = 0;
+            if (count == 1) {
+                fprintf(stderr, "Noise val: %f", combined);
+            }
+            count++;
+
+            for (u32 y = 0; y < CHUNK_DIM_Y; y++) {
+                pos_w = local_to_voxel(simd_make_int3(x, y, z), chunk->position);
+                u32 idx = local_to_chunk_index(voxel_to_local(pos_w));
+
+                if (pos_w.y < ground_height && pos_w.y >= grass_height) {
+                    chunk->data[idx] = GREEN;
+                } else if (pos_w.y < ground_height) {
+                    chunk->data[idx] = GREY;
+                } else {
+                    chunk->data[idx] = AIR;
+                }
+            }
         }
-
     }
+
 }
 
 
