@@ -6,6 +6,7 @@
 #include "world/world.h"
 #include "player/player.h"
 // #include "debug.h"
+#include "jobs.h"
 
 struct {
     struct Renderer renderer;
@@ -13,6 +14,7 @@ struct {
     struct Input input;
     struct World world;
     struct Player player;
+    struct JobSystem jobs;
     // struct DebugUI debug;
 } state;
 
@@ -30,7 +32,8 @@ static void init() {
     player_init(&state.player, (double3){ 0.0, 5.0, 0.0 });
     renderer_init(&state.renderer);
     camera_init(&state.camera, &state.player, radians(60.0), 0.01, 1000.0);
-    world_init(&state.world);
+    jobs_init(&state.jobs, 0);
+    world_init(&state.world, &state.jobs);
 
     // debug_init(&state.debug);
 }
@@ -58,6 +61,7 @@ static void frame() {
 }
 
 static void cleanup() {
+    jobs_destroy(&state.jobs);
     world_destroy(&state.world);
     simgui_shutdown();
     sg_shutdown();
@@ -78,8 +82,8 @@ sapp_desc sokol_main(int argc, char* argv[]) {
         .frame_cb = frame,
         .cleanup_cb = cleanup,
         .event_cb = input,
-        .width = 1278,
-        .height = 912,
+        .width = 1700,
+        .height = 1000,
         .window_title = "dive",
         .icon.sokol_default = true,
         .enable_clipboard = true,

@@ -2,6 +2,7 @@
 #define CHUNK_H
 
 #include "utils/util.h"
+#include "jobs.h"
 
 /* Types of coordinates:
  *  | World - double3 - unbounded
@@ -137,9 +138,32 @@ struct MeshBuffer {
     sg_buffer paddbuf;
 };
 
+struct ChunkJob {
+    // intrusive, jobsys only sees this
+    struct Job job;
+
+    enum { JOB_GENERATE, JOB_MESH } type;
+    int3 chunk_pos;
+    i32 seed;
+
+    // in case a job finishes too late
+    u32 version;
+
+    // world gen output buffer
+    u8 *voxels;
+
+    struct MeshScratch scratch;
+
+    // for main thread only. don't assign the same job to multiple workers
+    bool in_use;
+};
+
 struct Chunk {
     // world position in chunks
     int3 position;
+
+    // incremented on dirty, release, load, mesh
+    u32 version;
 
     // array of voxel data for this chunk.
     // data is an index into a color palette [0, 255]
@@ -150,8 +174,11 @@ struct Chunk {
     // whether the chunk is loaded/unloaded, etc.
     struct {
         bool initialized: 1;
+        bool loading: 1;
+
         bool meshing: 1;
         bool meshed: 1;
+
         bool empty: 1;
         bool solid: 1;
         bool dirty: 1;
@@ -165,10 +192,14 @@ void chunk_init(struct Chunk *chunk, int3 chunk_pos);
 void chunk_reset(struct Chunk *chunk);
 void chunk_destroy(struct Chunk *chunk);
 
+void chunk_generate(u8 *data, int3 chunk_pos, i32 seed);
+void chunk_apply_terrain(struct Chunk *chunk, struct ChunkJob *cjob);
+
 void build_padded_data(u8 *padded, const struct Chunk *neighbors[27]);
 bool chunk_prepare_mesh(struct Chunk *chunk, const struct Chunk *neighbors[27], struct MeshScratch *scratch);
 void chunk_mesh(struct MeshScratch *scratch);
-void apply_chunk_mesh(struct Chunk *chunk, const struct MeshScratch *scratch);
+void chunk_apply_mesh(struct Chunk *chunk, struct ChunkJob *cjob);
+
 void chunk_render(const struct Chunk *chunk, sg_buffer ibuf, sg_view palette, double3 cam_pos);
 
 #endif  /* CHUNK_H */

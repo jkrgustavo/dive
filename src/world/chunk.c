@@ -2,6 +2,7 @@
 #include "utils/mat_math.h"
 #include <ba_buffer.h>
 #include <simd/geometry.h>
+#include <FastNoiseLite.h>
 
 
 static const int3 face_vertex_mask[] = {
@@ -33,6 +34,76 @@ static void mesh_release(struct MeshBuffer *mesh) {
     *mesh = (struct MeshBuffer){0};
 }
 
+// thread safe
+void chunk_generate(u8 *data, int3 chunk_pos, i32 seed) {
+    if (chunk_pos.y >= 2) {
+        memset(data, 0, sizeof(u8) * CHUNK_VOLUME);
+        return;
+    } else if (chunk_pos.y < -2) {
+        memset(data, GREY, sizeof(u8) * CHUNK_VOLUME);
+        return;
+    }
+
+    fnl_state cont_n = fnlCreateState(); 
+    fnl_state mask_n = fnlCreateState(); 
+    fnl_state ridge_n = fnlCreateState(); 
+    fnl_state bump_n = fnlCreateState();
+
+    cont_n.seed = seed;      
+    cont_n.frequency = 0.0001f;
+
+    mask_n.seed = seed + 1;  
+    mask_n.frequency = 0.01f;
+
+    ridge_n.seed = seed + 2; 
+    ridge_n.frequency = 0.001f; 
+    ridge_n.fractal_type = FNL_FRACTAL_RIDGED;
+
+    bump_n.seed = seed + 3;  
+    bump_n.frequency = 0.05f;   
+    bump_n.fractal_type = FNL_FRACTAL_FBM;
+    bump_n.octaves = 2;      
+    bump_n.noise_type = FNL_NOISE_OPENSIMPLEX2S;
+
+    for (u32 z = 0; z < CHUNK_DIM_Z; z++) {
+        for (u32 x = 0; x < CHUNK_DIM_X; x++) {
+            int3 pos_w = local_to_voxel(simd_make_int3(x, 0, z), chunk_pos);
+                
+            f32 cont = fnlGetNoise2D(&cont_n, pos_w.x, pos_w.z);
+            f32 mask = (fnlGetNoise2D(&mask_n, pos_w.x, pos_w.z) + 1.0) / 2.0;
+            f32 ridge = (fnlGetNoise2D(&ridge_n, pos_w.x, pos_w.z) + 1.0) / 2.0;
+            f32 bumps = (fnlGetNoise2D(&bump_n, pos_w.x, pos_w.z) + 1.0) / 2.0;
+
+            i32 ground_height = (int)(cont * 30.0 + mask * mask * ridge * 80.0 + bumps * 3.0);
+            f32 grass_height = ground_height - 1;
+
+            for (u32 y = 0; y < CHUNK_DIM_Y; y++) {
+                pos_w = local_to_voxel(simd_make_int3(x, y, z), chunk_pos);
+                u32 idx = local_to_chunk_index(voxel_to_local(pos_w));
+
+                if (pos_w.y < ground_height && pos_w.y >= grass_height) {
+                    data[idx] = GREEN;
+                } else if (pos_w.y < ground_height) {
+                    data[idx] = GREY;
+                } else {
+                    data[idx] = AIR;
+                }
+            }
+        }
+    }
+
+}
+
+// swap job's and chunk's buffers
+void chunk_apply_terrain(struct Chunk *chunk, struct ChunkJob *cjob) {
+    bs_assert(chunk && cjob);
+    u8 *tmp = chunk->data;
+    chunk->data = cjob->voxels;
+    cjob->voxels = tmp;
+
+    chunk->flags.loading = false;
+}
+
 // Takes in this chunk's world position in chunks
 void chunk_init(struct Chunk *chunk, int3 chunk_pos) {
     bs_assert(chunk, "Don't init a loaded chunk");
@@ -43,13 +114,13 @@ void chunk_init(struct Chunk *chunk, int3 chunk_pos) {
         chunk->data = data;
     }
 
-    // init flag set after terrain gen
     chunk->position = chunk_pos;
     chunk->flags.meshing = false;
     chunk->flags.meshed = false;
     chunk->flags.empty = false;
     chunk->flags.solid = false;
     chunk->flags.dirty = false;
+    chunk->flags.loading = false;
     chunk->flags.initialized = true;
 }
 
@@ -58,6 +129,7 @@ void chunk_set_block(struct Chunk *chunk, int3 local_pos, enum VoxelColor id) {
     u32 idx = local_to_chunk_index(local_pos);
     chunk->data[idx] = id;
     chunk->flags.dirty = true;
+    chunk->version++;
 }
 
 
@@ -93,12 +165,11 @@ void build_padded_data(u8 *padded, const struct Chunk *neighbors[27]) {
     }
 }
 bool chunk_prepare_mesh(struct Chunk *chunk, const struct Chunk *neighbors[27], struct MeshScratch *scratch) {
-    bs_assert(chunk && chunk->flags.initialized && !chunk->flags.meshing, "Invalid chunk");
-    if ((chunk->flags.meshed && !chunk->flags.dirty) || chunk->flags.empty)
+    bs_assert(chunk && chunk->flags.initialized, "Invalid chunk");
+    if ((chunk->flags.meshed && !chunk->flags.dirty) || chunk->flags.empty || chunk->flags.meshing)
         return false;
     
     chunk->flags.meshing = true;
-    mesh_release(&chunk->mesh);
     build_padded_data(scratch->padded_data, neighbors);
     bs_buffer_clear(&scratch->quads);
 
@@ -129,7 +200,11 @@ void chunk_mesh(struct MeshScratch *scratch) {
 }
 
 // updates in-flight flags
-void apply_chunk_mesh(struct Chunk *chunk, const struct MeshScratch *scratch) {
+void chunk_apply_mesh(struct Chunk *chunk, struct ChunkJob *cjob) {
+    mesh_release(&chunk->mesh);
+
+    struct MeshScratch *scratch = &cjob->scratch;
+
     chunk->mesh.vertex_count = scratch->quads.count;
 
     if (scratch->quads.count == 0) {
@@ -205,6 +280,8 @@ void chunk_reset(struct Chunk *chunk) {
     chunk->flags.empty = false;
     chunk->flags.solid = false;
     chunk->position = simd_make_int3(0, 0, 0);
+
+    chunk->version++;
 }
 
 void chunk_destroy(struct Chunk *chunk) {

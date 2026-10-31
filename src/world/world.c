@@ -2,6 +2,7 @@
 #include <tgmath.h>
 
 #include "world.h"
+#include "jobs.h"
 
 static void build_ibuf(struct World *world) {
     const u32 face_indices[] = { 0, 1, 2,  0, 2, 3 };
@@ -26,6 +27,18 @@ static void build_ibuf(struct World *world) {
     free(temp_index_buffer);
 }
 
+static struct ChunkJob *chunk_job_get(struct World *world) {
+    for (u32 i = 0; i < JOB_POOL_SIZE; i++) {
+        if (!world->job_pool[i].in_use) {
+            world->job_pool[i].in_use = true;
+            return &world->job_pool[i];
+        }
+    }
+    // pool exausted
+    return NULL;
+}
+
+
 static void build_palette(struct World *world) {
     u32 palette[256] = {0};
     palette[RED] = 0xFF0000FF;
@@ -46,62 +59,17 @@ static void build_palette(struct World *world) {
     });
 }
 
-// thread safe
-static void generate_terrain(u8 *data, int3 chunk_pos, i32 seed) {
-    if (chunk_pos.y >= 2) {
-        memset(data, 0, sizeof(u8) * CHUNK_VOLUME);
-        return;
-    } else if (chunk_pos.y < -2) {
-        memset(data, GREY, sizeof(u8) * CHUNK_VOLUME);
-        return;
+
+static void chunk_job_run(struct Job *job) {
+    struct ChunkJob *cjob = (struct ChunkJob *)job;
+    if (cjob->type == JOB_GENERATE) {
+        chunk_generate(cjob->voxels, cjob->chunk_pos, cjob->seed);
+    } else {
+        chunk_mesh(&cjob->scratch);
     }
-
-    fnl_state noise = fnlCreateState();
-    noise.seed = seed;
-    noise.noise_type = FNL_NOISE_OPENSIMPLEX2;
-
-    for (u32 z = 0; z < CHUNK_DIM_Z; z++) {
-        for (u32 x = 0; x < CHUNK_DIM_X; x++) {
-            int3 pos_w = local_to_voxel(simd_make_int3(x, 0, z), chunk_pos);
-                
-            noise.frequency = 0.0001;
-            f32 cont = fnlGetNoise2D(&noise, pos_w.x, pos_w.z);
-
-            noise.frequency = 0.01;
-            f32 mask = (fnlGetNoise2D(&noise, pos_w.x, pos_w.z) + 1.0) / 2.0;
-
-            noise.frequency = 0.001;
-            noise.fractal_type = FNL_FRACTAL_RIDGED;
-            f32 ridge = (fnlGetNoise2D(&noise, pos_w.x, pos_w.z) + 1.0) / 2.0;
-
-            noise.frequency = 0.05;
-            noise.octaves = 2;
-            noise.fractal_type = FNL_FRACTAL_FBM;
-            noise.noise_type = FNL_NOISE_OPENSIMPLEX2S;
-            f32 bumps = (fnlGetNoise2D(&noise, pos_w.x, pos_w.z) + 1.0) / 2.0;
-
-            i32 ground_height = (int)(cont * 30.0 + mask * mask * ridge * 80.0 + bumps * 3.0);
-            f32 grass_height = ground_height - 1;
-
-            for (u32 y = 0; y < CHUNK_DIM_Y; y++) {
-                pos_w = local_to_voxel(simd_make_int3(x, y, z), chunk_pos);
-                u32 idx = local_to_chunk_index(voxel_to_local(pos_w));
-
-                if (pos_w.y < ground_height && pos_w.y >= grass_height) {
-                    data[idx] = GREEN;
-                } else if (pos_w.y < ground_height) {
-                    data[idx] = GREY;
-                } else {
-                    data[idx] = AIR;
-                }
-            }
-        }
-    }
-
 }
 
-
-int cmp(const void *a, const void *b) {
+static int cmp(const void *a, const void *b) {
     double3 pos_a = simd_double(*(int3*)a);
     double3 pos_b = simd_double(*(int3*)b);
 
@@ -128,45 +96,44 @@ static void build_offsets(struct World *world) {
     memcpy(world->offsets, offsets, sizeof(int3) * n);
 }
 
-static void load_chunk(struct World *world, struct Chunk *cx, int3 chunk_pos) {
+// sets the chunk-job's fields
+static void load_chunk(struct World *world, struct Chunk *cx, struct ChunkJob *cjob, int3 chunk_pos) {
     chunk_init(cx, chunk_pos);
-    generate_terrain(cx->data, cx->position, world->seed);
-
-    // mark any neighbor chunks in a 3x3x3 grid that are meshed as dirty
-    for (u32 i = 0; i < 27; i++) {
-        if (i == 13) continue;
-        int3 neighbor_pos = cx->position + simd_make_int3(i%3-1, (i/3)%3-1, i/9-1);
-        struct Chunk *nc = world_get_chunk(world, neighbor_pos);
-        if (nc != NULL && nc->flags.meshed && !nc->flags.empty) nc->flags.dirty = true;
-    }
+    cjob->job.run = chunk_job_run;
+    cjob->type = JOB_GENERATE;
+    cjob->chunk_pos = chunk_pos;
+    cjob->version = cx->version;
+    if (!cjob->voxels) cjob->voxels = malloc(sizeof(u8) * CHUNK_VOLUME);
+    cjob->seed = world->seed;
+    cx->flags.loading = true;
+    jobs_submit(world->job_system, &cjob->job);
 
 }
 
 static void world_recenter(struct World *world) {
     for (u32 i = 0; i < world->offset_count; i++) {
-        if (world->load_limits.count >= world->load_limits.max) 
-            break;
 
         int3 chunk_pos = world->center + world->offsets[i];
         u32 cidx = chunk_to_world_index(chunk_pos);
         if (world->chunks[cidx] == NULL) { 
             world->chunks[cidx] = calloc(1, sizeof(struct Chunk));
+            world->chunks[cidx]->version = 0;
         }
 
         struct Chunk *cx = world->chunks[cidx];
 
-        if (cx->flags.initialized && simd_all(cx->position == chunk_pos)) 
-            continue;
+        if (cx->flags.initialized && simd_all(cx->position == chunk_pos)) continue;
 
-        if (cx->flags.initialized)
-            chunk_reset(cx);
+        struct ChunkJob *cjob = chunk_job_get(world);
+        if (!cjob) break;
+
+        if (cx->flags.initialized) chunk_reset(cx);
         
-        load_chunk(world, cx, chunk_pos);
-        world->load_limits.count++;
+        load_chunk(world, cx, cjob, chunk_pos);
     }
 }
 
-void world_init(struct World *world) {
+void world_init(struct World *world, struct JobSystem *job_sys) {
     bs_assert(world->chunks == NULL, "Multiple calls to init");
     world->seed = 42;
 
@@ -179,10 +146,11 @@ void world_init(struct World *world) {
 
     world->chunks = calloc(world->chunk_count, sizeof(struct Chunk*));
 
-    world->scratch = calloc(1, sizeof(struct MeshScratch));
+    world->job_pool = calloc(JOB_POOL_SIZE, sizeof(struct ChunkJob));
+    world->job_system = job_sys;
 
     // dont throttle chunks on startup
-    world->load_limits.max = 100;
+    world->load_limits.max = 12;
     world->mesh_limits.max = 5;
     world->load_limits.count = 0;
     world->mesh_limits.count = 0;
@@ -192,38 +160,77 @@ void world_init(struct World *world) {
     build_offsets(world);
     world_recenter(world);
 
-    world->load_limits.max = 5;
 }
-
-
 
 static void world_mesh(struct World *world) {
     for (u32 i = 0; i < world->offset_count; i++) {
-        if (world->mesh_limits.count >= world->mesh_limits.max)
-            break;
 
         struct Chunk *cx = world_get_chunk(world, world->center + world->offsets[i]);
-        if (!cx || cx->flags.empty) continue;
+        if (!cx || cx->flags.empty) continue; 
 
         if (!cx->flags.meshed || cx->flags.dirty) {
             bool neighbor_loading = false;
             const struct Chunk *neighbors[27];
-            for (u32 i = 0; i < 27; i++) {
+            for (u32 n = 0; n < 27; n++) {
                 // 3x3x3 block around the chunk. idx 13 is the current chunk
-                int3 neighbor_pos = cx->position + simd_make_int3(i%3-1, (i/3)%3-1, i/9-1);
-                neighbors[i] = world_get_chunk(world, neighbor_pos);
+                int3 neighbor_pos = cx->position + simd_make_int3(n%3-1, (n/3)%3-1, n/9-1);
+                neighbors[n] = world_get_chunk(world, neighbor_pos);
 
-                if (!neighbors[i] && offset_in_view(neighbor_pos - world->center))
-                    neighbor_loading = true;
+                neighbor_loading = neighbors[n] ? neighbors[n]->flags.loading 
+                    : offset_in_view(neighbor_pos - world->center);
             }
 
-            if (neighbor_loading || !chunk_prepare_mesh(cx, neighbors, world->scratch)) 
-                continue;
+            if (neighbor_loading) continue;
 
-            chunk_mesh(world->scratch);
-            apply_chunk_mesh(cx, world->scratch);
-            world->mesh_limits.count++;
+            struct ChunkJob *cjob = chunk_job_get(world);
+            if (!cjob) break;
+
+            if (!chunk_prepare_mesh(cx, neighbors, &cjob->scratch)) {
+                cjob->in_use = false;
+                continue;
+            }
+            cjob->type = JOB_MESH;
+            cjob->version = cx->version;
+            cjob->job.run = chunk_job_run;
+            cjob->chunk_pos = cx->position;
+            jobs_submit(world->job_system, &cjob->job);
         }
+    }
+}
+
+static void world_apply_finished_jobs(struct World *world) {
+    struct Job *job;
+    while ((job = jobs_poll(world->job_system)) != NULL) {
+        struct ChunkJob *cjob = (struct ChunkJob *)job;
+        struct Chunk *chunk = world->chunks[chunk_to_world_index(cjob->chunk_pos)];
+
+        bool current = simd_all(chunk->position == cjob->chunk_pos) && chunk->version == cjob->version;
+
+        if (current && cjob->type == JOB_MESH) { 
+            chunk_apply_mesh(chunk, cjob); 
+        } 
+        // else if (cjob->type == JOB_MESH) {
+        //     // apply the stale mesh and resubmit later
+        //     chunk_apply_mesh(chunk, cjob);
+        //     chunk->flags.dirty = true;
+        //     chunk->version++;
+        // }
+        if (current && cjob->type == JOB_GENERATE) {
+            chunk_apply_terrain(chunk, cjob);
+
+            // mark any neighbor chunks in a 3x3x3 grid that are meshed as dirty
+            for (u32 i = 0; i < 27; i++) {
+                if (i == 13) continue;
+                int3 neighbor_pos = chunk->position + simd_make_int3(i%3-1, (i/3)%3-1, i/9-1);
+                struct Chunk *nc = world_get_chunk(world, neighbor_pos);
+                if (nc != NULL && nc->flags.meshed && !nc->flags.empty) {
+                    nc->flags.dirty = true;
+                    nc->version++;
+                }
+            }
+        }
+
+        cjob->in_use = false;
     }
 }
 
@@ -233,6 +240,7 @@ void world_update(struct World *world, double3 player_pos) {
     world->load_limits.count = 0;
     world->mesh_limits.count = 0;
 
+    world_apply_finished_jobs(world);
     world_recenter(world);
     world_mesh(world);
 }
@@ -259,8 +267,13 @@ void world_destroy(struct World *world) {
     sg_destroy_buffer(world->palette.palette_buf);
     free(world->chunks);
     free(world->offsets);
-    bs_buffer_free(&world->scratch->quads);
-    free(world->scratch);
+    for (u32 i = 0; i < JOB_POOL_SIZE; i++) {
+        struct ChunkJob *cjob = &world->job_pool[i];
+        bs_buffer_free(&cjob->scratch.quads);
+        if (cjob->voxels)
+            free(cjob->voxels);
+    }
+    free(world->job_pool);
     world->chunk_count = 0;
     world->offset_count = 0;
 }

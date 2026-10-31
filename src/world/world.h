@@ -1,8 +1,6 @@
 #ifndef WORLD_H
 #define WORLD_H
 
-#include <FastNoiseLite.h>
-
 #include "utils/util.h"
 #include "chunk.h"
 /* Types of coordinates:
@@ -23,6 +21,8 @@
  *
  * Offsets are based off the world center.
  */
+
+#define JOB_POOL_SIZE 16
 
 #define WORLD_SIZE_X 16
 #define WORLD_SIZE_Y 8
@@ -58,6 +58,7 @@ static inline bool offset_in_view(const int3 offset) {
 }
 
 
+
 struct World {
     i32 seed;
 
@@ -80,8 +81,11 @@ struct World {
     // Shared index buffer across all chunks
     sg_buffer index_buffer;
 
-    // temporary scratch data used when meshing
-    struct MeshScratch *scratch;
+    // job pool for worker threads
+    struct ChunkJob *job_pool;
+
+    // owned by main
+    struct JobSystem *job_system;
 
     // Tracks and limits how many chunks are processed in a frame
     struct {
@@ -120,7 +124,7 @@ static inline bool world_solid_at(const struct World *world, const int3 vox_pos)
     return (c->data[local_to_chunk_index(voxel_to_local(vox_pos))] != AIR);
 }
 
-void world_init(struct World *world);
+void world_init(struct World *world, struct JobSystem *job_sys);
 void world_update(struct World *world, double3 player_pos);
 void world_render(struct World *world, double3 camera_pos);
 void world_destroy(struct World *world);
