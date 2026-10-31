@@ -46,57 +46,53 @@ static void build_palette(struct World *world) {
     });
 }
 
-static void generate_terrain(struct Chunk *chunk, fnl_state *noise) {
-    if (chunk->position.y >= 2) {
-        memset(chunk->data, 0, sizeof(u8) * CHUNK_VOLUME);
+// thread safe
+static void generate_terrain(u8 *data, int3 chunk_pos, i32 seed) {
+    if (chunk_pos.y >= 2) {
+        memset(data, 0, sizeof(u8) * CHUNK_VOLUME);
         return;
-    } else if (chunk->position.y < -2) {
-        memset(chunk->data, GREY, sizeof(u8) * CHUNK_VOLUME);
+    } else if (chunk_pos.y < -2) {
+        memset(data, GREY, sizeof(u8) * CHUNK_VOLUME);
         return;
     }
 
-    // for (u32 v = 0; v < CHUNK_VOLUME; v++) {
+    fnl_state noise = fnlCreateState();
+    noise.seed = seed;
+    noise.noise_type = FNL_NOISE_OPENSIMPLEX2;
+
     for (u32 z = 0; z < CHUNK_DIM_Z; z++) {
         for (u32 x = 0; x < CHUNK_DIM_X; x++) {
-            int3 pos_w = local_to_voxel(simd_make_int3(x, 0, z), chunk->position);
+            int3 pos_w = local_to_voxel(simd_make_int3(x, 0, z), chunk_pos);
                 
-            noise->frequency = 0.0001;
-            f32 cont = fnlGetNoise2D(noise, pos_w.x, pos_w.z);
+            noise.frequency = 0.0001;
+            f32 cont = fnlGetNoise2D(&noise, pos_w.x, pos_w.z);
 
-            noise->frequency = 0.01;
-            f32 mask = (fnlGetNoise2D(noise, pos_w.x, pos_w.z) + 1) / 2;
+            noise.frequency = 0.01;
+            f32 mask = (fnlGetNoise2D(&noise, pos_w.x, pos_w.z) + 1.0) / 2.0;
 
-            noise->frequency = 0.001;
-            noise->fractal_type = FNL_FRACTAL_RIDGED;
-            f32 ridge = (fnlGetNoise2D(noise, pos_w.x, pos_w.z) + 1) / 2;
+            noise.frequency = 0.001;
+            noise.fractal_type = FNL_FRACTAL_RIDGED;
+            f32 ridge = (fnlGetNoise2D(&noise, pos_w.x, pos_w.z) + 1.0) / 2.0;
 
-            noise->frequency = 0.05;
-            noise->octaves = 2;
-            noise->fractal_type = FNL_FRACTAL_FBM;
-            noise->noise_type = FNL_NOISE_OPENSIMPLEX2S;
-            f32 bumps = (fnlGetNoise2D(noise, pos_w.x, pos_w.z) + 1) / 2;
+            noise.frequency = 0.05;
+            noise.octaves = 2;
+            noise.fractal_type = FNL_FRACTAL_FBM;
+            noise.noise_type = FNL_NOISE_OPENSIMPLEX2S;
+            f32 bumps = (fnlGetNoise2D(&noise, pos_w.x, pos_w.z) + 1.0) / 2.0;
 
-            f32 combined = (int)(cont * 30 + mask * mask * ridge * 80 + bumps * 3);
-
-            i32 ground_height = combined;
+            i32 ground_height = (int)(cont * 30.0 + mask * mask * ridge * 80.0 + bumps * 3.0);
             f32 grass_height = ground_height - 1;
 
-            static int count = 0;
-            if (count == 1) {
-                fprintf(stderr, "Noise val: %f", combined);
-            }
-            count++;
-
             for (u32 y = 0; y < CHUNK_DIM_Y; y++) {
-                pos_w = local_to_voxel(simd_make_int3(x, y, z), chunk->position);
+                pos_w = local_to_voxel(simd_make_int3(x, y, z), chunk_pos);
                 u32 idx = local_to_chunk_index(voxel_to_local(pos_w));
 
                 if (pos_w.y < ground_height && pos_w.y >= grass_height) {
-                    chunk->data[idx] = GREEN;
+                    data[idx] = GREEN;
                 } else if (pos_w.y < ground_height) {
-                    chunk->data[idx] = GREY;
+                    data[idx] = GREY;
                 } else {
-                    chunk->data[idx] = AIR;
+                    data[idx] = AIR;
                 }
             }
         }
@@ -134,7 +130,7 @@ static void build_offsets(struct World *world) {
 
 static void load_chunk(struct World *world, struct Chunk *cx, int3 chunk_pos) {
     chunk_init(cx, chunk_pos);
-    generate_terrain(cx, &world->noise);
+    generate_terrain(cx->data, cx->position, world->seed);
 
     // mark any neighbor chunks in a 3x3x3 grid that are meshed as dirty
     for (u32 i = 0; i < 27; i++) {
@@ -171,7 +167,9 @@ static void world_recenter(struct World *world) {
 }
 
 void world_init(struct World *world) {
-    assert(world->chunks == NULL);
+    bs_assert(world->chunks == NULL, "Multiple calls to init");
+    world->seed = 42;
+
     world->chunk_count = WORLD_VOLUME;
 
     world->position = -WORLD_DIM + (WORLD_DIM/2);
@@ -189,10 +187,6 @@ void world_init(struct World *world) {
     world->load_limits.count = 0;
     world->mesh_limits.count = 0;
 
-    world->noise = fnlCreateState();
-    world->noise.seed = 42;
-    world->noise.noise_type = FNL_NOISE_OPENSIMPLEX2;
-
     build_ibuf(world);
     build_palette(world);
     build_offsets(world);
@@ -201,8 +195,9 @@ void world_init(struct World *world) {
     world->load_limits.max = 5;
 }
 
-static void world_mesh(struct World *world) {
 
+
+static void world_mesh(struct World *world) {
     for (u32 i = 0; i < world->offset_count; i++) {
         if (world->mesh_limits.count >= world->mesh_limits.max)
             break;
@@ -211,7 +206,6 @@ static void world_mesh(struct World *world) {
         if (!cx || cx->flags.empty) continue;
 
         if (!cx->flags.meshed || cx->flags.dirty) {
-
             bool neighbor_loading = false;
             const struct Chunk *neighbors[27];
             for (u32 i = 0; i < 27; i++) {
@@ -223,12 +217,13 @@ static void world_mesh(struct World *world) {
                     neighbor_loading = true;
             }
 
-            if (neighbor_loading) continue;
+            if (neighbor_loading || !chunk_prepare_mesh(cx, neighbors, world->scratch)) 
+                continue;
 
-            chunk_mesh(cx, neighbors, world->scratch);
+            chunk_mesh(world->scratch);
+            apply_chunk_mesh(cx, world->scratch);
             world->mesh_limits.count++;
         }
-
     }
 }
 

@@ -78,6 +78,12 @@ static inline bool voxel_in_chunk(const int3 local_pos) {
     return simd_all(local_pos >= 0) && simd_all(local_pos < CHUNK_DIM);
 }
 
+#define PADDED_CHUNK_DIM_X (CHUNK_DIM_X+2)
+#define PADDED_CHUNK_DIM_Y (CHUNK_DIM_Y+2)
+#define PADDED_CHUNK_DIM_Z (CHUNK_DIM_Z+2)
+
+#define PADDED_CHUNK_VOLUME ((PADDED_CHUNK_DIM_X) * (PADDED_CHUNK_DIM_Y) * (PADDED_CHUNK_DIM_Z))
+
 enum Direction {
     FRONT = 0,  // +z
     BACK,       // -z
@@ -115,8 +121,10 @@ struct MeshScratch {
         size_t count, capacity;
     } quads;
 
+    bool solid: 1;
+
     // padded chunk data to be sent to the GPU
-    u8 padded_data[(CHUNK_DIM_X + 2) * (CHUNK_DIM_Y + 2) * (CHUNK_DIM_Z + 2)];
+    u8 padded_data[PADDED_CHUNK_DIM_X * PADDED_CHUNK_DIM_Y * PADDED_CHUNK_DIM_Z];
 };
 
 struct MeshBuffer {
@@ -145,17 +153,22 @@ struct Chunk {
         bool meshing: 1;
         bool meshed: 1;
         bool empty: 1;
+        bool solid: 1;
         bool dirty: 1;
     } flags;
 
 };
 
+void chunk_set_block(struct Chunk *chunk, int3 local_pos, enum VoxelColor id);
 
 void chunk_init(struct Chunk *chunk, int3 chunk_pos);
-void chunk_set_block(struct Chunk *chunk, int3 local_pos, enum VoxelColor id);
-void chunk_mesh(struct Chunk *chunk, const struct Chunk *neighbors[27], struct MeshScratch *scratch);
-void chunk_render(const struct Chunk *chunk, sg_buffer ibuf, sg_view palette, double3 cam_pos);
 void chunk_reset(struct Chunk *chunk);
 void chunk_destroy(struct Chunk *chunk);
+
+void build_padded_data(u8 *padded, const struct Chunk *neighbors[27]);
+bool chunk_prepare_mesh(struct Chunk *chunk, const struct Chunk *neighbors[27], struct MeshScratch *scratch);
+void chunk_mesh(struct MeshScratch *scratch);
+void apply_chunk_mesh(struct Chunk *chunk, const struct MeshScratch *scratch);
+void chunk_render(const struct Chunk *chunk, sg_buffer ibuf, sg_view palette, double3 cam_pos);
 
 #endif  /* CHUNK_H */

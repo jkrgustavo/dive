@@ -59,6 +59,8 @@ static inline bool offset_in_view(const int3 offset) {
 
 
 struct World {
+    i32 seed;
+
     // Total number of chunks in the chunk array
     u32 chunk_count;
 
@@ -77,9 +79,6 @@ struct World {
 
     // Shared index buffer across all chunks
     sg_buffer index_buffer;
-
-    // FastNoiseLite state struct
-    fnl_state noise;
 
     // temporary scratch data used when meshing
     struct MeshScratch *scratch;
