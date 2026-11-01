@@ -157,7 +157,7 @@ static const i32 padded_stride[6] = {
     -PADDED_CHUNK_DIM_X,                        // DOWN  -y
 };
 
-void build_padded_data(u8 *padded, const struct Chunk *neighbors[27]) {
+void _build_padded_data(u8 *padded, const struct Chunk *neighbors[27]) {
     // triple loop bc padded chunk dim isn't a power of two
     for (i32 z = -1; z < PADDED_CHUNK_DIM_Z-1; z++) {
         for (i32 y = -1; y < PADDED_CHUNK_DIM_Y-1; y++) {
@@ -181,6 +181,51 @@ void build_padded_data(u8 *padded, const struct Chunk *neighbors[27]) {
         }
     }
 }
+
+static inline const struct Chunk *neighbor_at(const struct Chunk *neighbors[27], int3 off) {
+    return neighbors[(off.x + 1) + (off.y + 1) * 3 + (off.z + 1) * 9];
+}
+
+static inline u8 sample_data(const struct Chunk *chunk, int3 local_pos) {
+    if (!chunk) return INVALID;
+
+    if (chunk->flags.empty) return AIR;
+
+    return chunk->data[local_to_chunk_index(local_pos)];
+}
+
+void build_padded_data(u8 *padded, const struct Chunk *neighbors[27]) {
+    // double loop bc padded chunk dim isn't a power of two
+    for (i32 z = -1; z < PADDED_CHUNK_DIM_Z-1; z++) {
+        for (i32 y = -1; y < PADDED_CHUNK_DIM_Y-1; y++) {
+                int3 vox    = simd_make_int3(0, y, z);
+                int3 offset = voxel_to_chunk(vox);
+                int3 local  = voxel_to_local(vox);
+
+                u8 *row = padded 
+                    + (y+1) * PADDED_CHUNK_DIM_X + (z+1) * PADDED_CHUNK_DIM_X * PADDED_CHUNK_DIM_Y;
+                
+                int3 off_right = offset + dir_offset[RIGHT];
+                row[0] = sample_data(neighbor_at(neighbors, off_right), 
+                            simd_make_int3(CHUNK_DIM.x - 1, local.y, local.z));
+
+                int3 off_left = offset + dir_offset[LEFT];
+                row[PADDED_CHUNK_DIM_X - 1] = sample_data(neighbor_at(neighbors, off_left),
+                        simd_make_int3(0, local.y, local.z));
+
+                const struct Chunk *chunk = neighbor_at(neighbors, offset);
+                if (!chunk) {
+                    memset(row + 1, INVALID, CHUNK_DIM.x);
+                } else if (chunk->flags.empty) {
+                    memset(row + 1, AIR, CHUNK_DIM.x);
+                } else {
+                    memcpy(row + 1, chunk->data + local_to_chunk_index(local), CHUNK_DIM.x);
+                }
+
+        }
+    }
+}
+
 bool chunk_prepare_mesh(struct Chunk *chunk, const struct Chunk *neighbors[27], struct MeshScratch *scratch) {
     bs_assert(chunk && chunk->state >= CHUNK_LOADED, "Invalid chunk");
     if ((chunk->state == CHUNK_READY && !chunk->flags.dirty) 
