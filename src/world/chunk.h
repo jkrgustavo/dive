@@ -123,6 +123,11 @@ enum ChunkState {
     CHUNK_READY,
 };
 
+enum ChunkJobType {
+    JOB_GENERATE,
+    JOB_MESH
+};
+
 struct MeshScratch {
     // scratch bs_buffer for quad generation
     struct QuadBuf {
@@ -150,7 +155,7 @@ struct ChunkJob {
     // intrusive, jobsys only sees this
     struct Job job;
 
-    enum { JOB_GENERATE, JOB_MESH } type;
+    enum ChunkJobType type;
     int3 chunk_pos;
     i32 seed;
 
@@ -203,6 +208,7 @@ void build_padded_data(u8 *padded, const struct Chunk *neighbors[27]);
 bool chunk_prepare_mesh(struct Chunk *chunk, const struct Chunk *neighbors[27], struct MeshScratch *scratch);
 void chunk_mesh(struct MeshScratch *scratch);
 void chunk_apply_mesh(struct Chunk *chunk, struct ChunkJob *cjob);
+void chunk_set_buried(struct Chunk *chunk);
 
 void chunk_render(const struct Chunk *chunk, sg_buffer ibuf, sg_view palette, double3 cam_pos);
 

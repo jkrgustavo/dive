@@ -87,10 +87,10 @@ struct World {
     // owned by main
     struct JobSystem *job_system;
 
-    // Tracks and limits how many chunks are processed in a frame
+    // Tracks and limits how many generation jobs can be active at a time
     struct {
-        u32 count, max;
-    } load_limits, mesh_limits;
+        u32 in_flight, max;
+    } gen_limit;
 
     // Color palette
     struct {

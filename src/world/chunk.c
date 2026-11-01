@@ -37,7 +37,7 @@ static void mesh_release(struct MeshBuffer *mesh) {
 // thread safe
 void chunk_generate(u8 *data, int3 chunk_pos, i32 seed) {
     i32 base_y = chunk_to_voxel(chunk_pos).y;
-    if (base_y >= 113) {
+    if (base_y >= 118) {
         memset(data, 0, sizeof(u8) * CHUNK_VOLUME);
         return;
     } else if (base_y < -30) {
@@ -78,7 +78,7 @@ void chunk_generate(u8 *data, int3 chunk_pos, i32 seed) {
             f32 bumps = (fnlGetNoise2D(&bump_n, pos_w.x, pos_w.z) + 1.0) / 2.0;
 
              height_map[x + z * CHUNK_DIM_X] 
-                 = (int)(cont * 30.0 + mask * mask * ridge * 80.0 + bumps * 3.0);
+                 = (int)(cont * 30.0 + mask * mask * ridge * 80.0 + bumps * 3.0) + 5;
         }
     }
 
@@ -118,11 +118,6 @@ void chunk_apply_terrain(struct Chunk *chunk, struct ChunkJob *cjob) {
 void chunk_init(struct Chunk *chunk, int3 chunk_pos) {
     bs_assert(chunk, "Don't init a loaded chunk");
     bs_assert(chunk->state == CHUNK_UNLOADED, "Chunk must be uninitialized before calling init");
-    if (!chunk->data) {
-        u8 *data = calloc(CHUNK_VOLUME, sizeof(u8));
-        bs_assert(data, "OOM while initing chunk");
-        chunk->data = data;
-    }
 
     chunk->position = chunk_pos;
     chunk->state = CHUNK_UNLOADED;
@@ -179,7 +174,7 @@ bool chunk_prepare_mesh(struct Chunk *chunk, const struct Chunk *neighbors[27], 
             || chunk->flags.empty 
             || chunk->state == CHUNK_MESHING)
         return false;
-    
+
     chunk->state = CHUNK_MESHING;
     build_padded_data(scratch->padded_data, neighbors);
     bs_buffer_clear(&scratch->quads);
@@ -190,17 +185,17 @@ bool chunk_prepare_mesh(struct Chunk *chunk, const struct Chunk *neighbors[27], 
 
 // Thread safe
 void chunk_mesh(struct MeshScratch *scratch) {
-    scratch->solid = false;
+    scratch->solid = true;
     for (size_t vox = 0; vox < CHUNK_VOLUME; vox++) {
         int3 local_pos = chunk_index_to_local(vox);
         i32 vox_padded_idx = 
             (local_pos.x+1) + (local_pos.y+1) * PADDED_CHUNK_DIM_X + (local_pos.z+1) * PADDED_CHUNK_DIM_X * PADDED_CHUNK_DIM_Y;
 
-        if (scratch->padded_data[vox_padded_idx] == AIR)
+        if (scratch->padded_data[vox_padded_idx] == AIR) {
+            scratch->solid = false;
             continue;
+        }
 
-
-        scratch->solid = true;
         for (u32 dir = 0; dir < 6; dir++) {
             if (scratch->padded_data[vox_padded_idx + padded_stride[dir]] != AIR)
                 continue;
@@ -247,6 +242,12 @@ void chunk_apply_mesh(struct Chunk *chunk, struct ChunkJob *cjob) {
     });
 
     chunk->state = CHUNK_READY;
+}
+
+void chunk_set_buried(struct Chunk *chunk) {
+    mesh_release(&chunk->mesh);
+    chunk->state = CHUNK_READY;
+    chunk->flags.dirty = false;
 }
 
 void chunk_render(const struct Chunk *chunk, sg_buffer ibuf, sg_view palette, double3 cam_pos) {
