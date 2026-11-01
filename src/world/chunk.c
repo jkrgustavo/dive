@@ -284,7 +284,7 @@ void chunk_set_buried(struct Chunk *chunk) {
     chunk->flags.dirty = false;
 }
 
-void chunk_render(const struct Chunk *chunk, sg_buffer ibuf, sg_view palette, double3 cam_pos) {
+void chunk_render(const struct Chunk *chunk, sg_view palette, double3 cam_pos) {
     bs_assert(chunk);
     bs_assert(chunk->state == CHUNK_READY || chunk->state == CHUNK_MESHING, "Attempt to render an invalid chunk");
     if (chunk->mesh.vertex_count == 0) return;
@@ -297,7 +297,6 @@ void chunk_render(const struct Chunk *chunk, sg_buffer ibuf, sg_view palette, do
     simd_float4x4 model_mat = simd_mul(mat_translation(rel_pos), mat_scale(scale));
 
     sg_apply_bindings(&(sg_bindings){
-        .index_buffer = ibuf,
         .views = { 
             [0] = chunk->mesh.vbuf_view, 
             [1] = chunk->mesh.paddbuf_view,

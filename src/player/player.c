@@ -177,7 +177,7 @@ static double3 derive_move_intent(struct Player *player, const struct Input *inp
 
 static void move(struct Player *player, const struct World *world, const struct Input *input, f32 pitch, f32 yaw) {
     double3 intent = derive_move_intent(player, input, pitch, yaw);
-    f64 dt = sapp_frame_duration();
+    f64 dt = simd_clamp(sapp_frame_duration(), 0.0, 100.0);
 
     if (player->flags.gravity) {
         player->velocity.xz = 0.0;

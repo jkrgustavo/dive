@@ -32,14 +32,16 @@ constant float3 corners[6][4] = {
     { {0,0,0}, {1,0,0}, {1,0,1}, {0,0,1} },
 };
 
+constant uint corner_lookup[6] = { 0, 1, 2, 0, 2, 3 };
+
 vertex vs_out _main(
     uint vid [[vertex_id]], 
     device const float4x4& view_proj_mat [[buffer(0)]],
     device const float4x4& model_mat [[buffer(1)]],
     device const uint64_t* quads [[buffer(8)]] 
 ) {
-    uint face = vid >> 2;
-    uint corner = vid & 3u;
+    uint face = vid / 6;
+    uint corner = corner_lookup[vid % 6];
 
     uint64_t q = quads[face];
     float3 pos = float3(uint3(uint(q & 0xFFFul), uint((q >> 12) & 0xFFFul), uint((q >> 24) & 0xFFFul)));

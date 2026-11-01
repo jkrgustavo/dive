@@ -78,9 +78,6 @@ struct World {
     // View radius, x == z, y is the height of the cylinder
     int3 view_radius;
 
-    // Shared index buffer across all chunks
-    sg_buffer index_buffer;
-
     // job pool for worker threads
     struct ChunkJob *job_pool;
 

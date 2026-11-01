@@ -212,6 +212,6 @@ void chunk_mesh(struct MeshScratch *scratch);
 void chunk_apply_mesh(struct Chunk *chunk, struct ChunkJob *cjob, bool fresh);
 void chunk_set_buried(struct Chunk *chunk);
 
-void chunk_render(const struct Chunk *chunk, sg_buffer ibuf, sg_view palette, double3 cam_pos);
+void chunk_render(const struct Chunk *chunk, sg_view palette, double3 cam_pos);
 
 #endif  /* CHUNK_H */

@@ -4,29 +4,6 @@
 #include "world.h"
 #include "jobs.h"
 
-static void build_ibuf(struct World *world) {
-    const u32 face_indices[] = { 0, 1, 2,  0, 2, 3 };
-    u32 quad_count = CHUNK_VOLUME * 3;
-
-    u32 *temp_index_buffer = malloc(sizeof(u32) * quad_count * 6);
-
-    for (u32 q = 0; q < quad_count; q++) {
-        u32 base = q * 4;
-        for (u32 i = 0; i < 6; i++) {
-            temp_index_buffer[q * 6 + i] = base + face_indices[i];
-        }
-    }
-
-    world->index_buffer = sg_make_buffer(&(sg_buffer_desc) {
-        .usage.index_buffer = true,
-        .data = {
-            .ptr = temp_index_buffer,
-            .size = sizeof(u32) * quad_count * 6
-        }
-    });
-    free(temp_index_buffer);
-}
-
 static struct ChunkJob *chunk_job_get(struct World *world, enum ChunkJobType type) {
     // chunks are generated first, this prevents generation from hogging the pool
     if (type == JOB_GENERATE && world->gen_limit.in_flight >= world->gen_limit.max)
@@ -161,7 +138,6 @@ void world_init(struct World *world, struct JobSystem *job_sys) {
     world->gen_limit.max = floor(JOB_POOL_SIZE / 2.0) + 2;
     world->gen_limit.in_flight = 0;
 
-    build_ibuf(world);
     build_palette(world);
     build_offsets(world);
     world_recenter(world);
@@ -262,7 +238,7 @@ void world_render(struct World *world, double3 camera_pos) {
         if (cx == NULL) { continue; }
 
         if (cx->state == CHUNK_READY || cx->state == CHUNK_MESHING)
-            chunk_render(cx, world->index_buffer, world->palette.palette_view, camera_pos);
+            chunk_render(cx, world->palette.palette_view, camera_pos);
     }
 }
 
@@ -273,7 +249,6 @@ void world_destroy(struct World *world) {
         free(world->chunks[c]);
         world->chunks[c] = NULL;
     }
-    sg_destroy_buffer(world->index_buffer);
     sg_destroy_view(world->palette.palette_view);
     sg_destroy_buffer(world->palette.palette_buf);
     free(world->chunks);

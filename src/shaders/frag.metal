@@ -42,7 +42,7 @@ fragment float4 _main(
     int3 vox = int3(floor(in.local_pos - 0.5 * in.normal));
     vox = clamp(vox, int3(0), int3(63));
     uint8_t data = voxel_dat[(vox.x+1) + (vox.y+1) * 66 + (vox.z+1) * 66*66];
-    float3 color = unpack_unorm4x8_to_float(palette[data]).rgb;
+    float4 color = unpack_unorm4x8_to_float(palette[data]);
     float light = get_light(voxel_dat, vox, in.local_pos, in.normal);
-    return float4(color * light, 1.0);
+    return float4(color.xyz * light, color.w);
 }

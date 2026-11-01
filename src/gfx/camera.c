@@ -11,9 +11,9 @@ void camera_init(struct Camera *cam, const struct Player *player, f32 fovy, f32 
     cam->fovy   = fovy;
     cam->aspect = sapp_widthf() / sapp_heightf();
     cam->pos = simd_make_double3(
-        player->position.x+(player->size.x/2.0), 
-        player->position.y+player->size.y, 
-        player->position.z+(player->size.z/2.0)
+        player->position.x, 
+        player->position.y+player->size.y-0.01, 
+        player->position.z
     );
 
     cam->view = mat_view_dir(derive_forward(cam->pitch, cam->yaw), simd_make_float3(0.0f, 1.0f, 0.0f));
