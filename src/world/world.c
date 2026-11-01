@@ -206,7 +206,7 @@ static void world_mesh(struct World *world) {
         if (!cjob) break;
 
         if (!chunk_prepare_mesh(cx, neighbors, &cjob->scratch)) {
-            cjob->in_use = false;
+            chunk_job_release(world, cjob);
             continue;
         }
         cjob->type = JOB_MESH;
