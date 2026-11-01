@@ -89,7 +89,7 @@ static void build_offsets(struct World *world) {
         }
     }
 
-    assert(n > 0);
+    bs_assert(n > 0, "somehow no offsets");
     qsort(offsets, n, sizeof(int3), cmp);
     world->offset_count = n;
     world->offsets = malloc(sizeof(int3) * n);
@@ -105,7 +105,7 @@ static void load_chunk(struct World *world, struct Chunk *cx, struct ChunkJob *c
     cjob->version = cx->version;
     if (!cjob->voxels) cjob->voxels = malloc(sizeof(u8) * CHUNK_VOLUME);
     cjob->seed = world->seed;
-    cx->flags.loading = true;
+    cx->state = CHUNK_LOADING;
     jobs_submit(world->job_system, &cjob->job);
 
 }
@@ -122,12 +122,12 @@ static void world_recenter(struct World *world) {
 
         struct Chunk *cx = world->chunks[cidx];
 
-        if (cx->flags.initialized && simd_all(cx->position == chunk_pos)) continue;
+        if (cx->state != CHUNK_UNLOADED && simd_all(cx->position == chunk_pos)) continue;
 
         struct ChunkJob *cjob = chunk_job_get(world);
         if (!cjob) break;
 
-        if (cx->flags.initialized) chunk_reset(cx);
+        if (cx->state != CHUNK_UNLOADED) chunk_reset(cx);
         
         load_chunk(world, cx, cjob, chunk_pos);
     }
@@ -135,7 +135,7 @@ static void world_recenter(struct World *world) {
 
 void world_init(struct World *world, struct JobSystem *job_sys) {
     bs_assert(world->chunks == NULL, "Multiple calls to init");
-    world->seed = 42;
+    world->seed = 100;
 
     world->chunk_count = WORLD_VOLUME;
 
@@ -168,7 +168,7 @@ static void world_mesh(struct World *world) {
         struct Chunk *cx = world_get_chunk(world, world->center + world->offsets[i]);
         if (!cx || cx->flags.empty) continue; 
 
-        if (!cx->flags.meshed || cx->flags.dirty) {
+        if (cx->state != CHUNK_READY || cx->flags.dirty) {
             bool neighbor_loading = false;
             const struct Chunk *neighbors[27];
             for (u32 n = 0; n < 27; n++) {
@@ -176,8 +176,8 @@ static void world_mesh(struct World *world) {
                 int3 neighbor_pos = cx->position + simd_make_int3(n%3-1, (n/3)%3-1, n/9-1);
                 neighbors[n] = world_get_chunk(world, neighbor_pos);
 
-                neighbor_loading = neighbors[n] ? neighbors[n]->flags.loading 
-                    : offset_in_view(neighbor_pos - world->center);
+                if (!neighbors[n] && offset_in_view(neighbor_pos - world->center)) 
+                    neighbor_loading = true;
             }
 
             if (neighbor_loading) continue;
@@ -206,26 +206,19 @@ static void world_apply_finished_jobs(struct World *world) {
 
         bool current = simd_all(chunk->position == cjob->chunk_pos) && chunk->version == cjob->version;
 
-        if (current && cjob->type == JOB_MESH) { 
-            chunk_apply_mesh(chunk, cjob); 
-        } 
-        // else if (cjob->type == JOB_MESH) {
-        //     // apply the stale mesh and resubmit later
-        //     chunk_apply_mesh(chunk, cjob);
-        //     chunk->flags.dirty = true;
-        //     chunk->version++;
-        // }
+        if (current && cjob->type == JOB_MESH) { chunk_apply_mesh(chunk, cjob); } 
         if (current && cjob->type == JOB_GENERATE) {
             chunk_apply_terrain(chunk, cjob);
-
             // mark any neighbor chunks in a 3x3x3 grid that are meshed as dirty
             for (u32 i = 0; i < 27; i++) {
                 if (i == 13) continue;
                 int3 neighbor_pos = chunk->position + simd_make_int3(i%3-1, (i/3)%3-1, i/9-1);
                 struct Chunk *nc = world_get_chunk(world, neighbor_pos);
-                if (nc != NULL && nc->flags.meshed && !nc->flags.empty) {
+                if (nc && nc->state == CHUNK_READY && !nc->flags.empty) {
                     nc->flags.dirty = true;
                     nc->version++;
+                } else if (nc && nc->state == CHUNK_MESHING) {
+                    nc->flags.dirty = true;
                 }
             }
         }
@@ -250,7 +243,7 @@ void world_render(struct World *world, double3 camera_pos) {
         struct Chunk *cx = world_get_chunk(world, world->center + world->offsets[i]);
         if (cx == NULL) { continue; }
 
-        if (cx->flags.initialized && cx->flags.meshed)
+        if (cx->state == CHUNK_READY)
             chunk_render(cx, world->index_buffer, world->palette.palette_view, camera_pos);
     }
 }

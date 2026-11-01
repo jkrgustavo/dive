@@ -22,7 +22,7 @@
  * Offsets are based off the world center.
  */
 
-#define JOB_POOL_SIZE 16
+#define JOB_POOL_SIZE 18
 
 #define WORLD_SIZE_X 16
 #define WORLD_SIZE_Y 8
@@ -110,7 +110,7 @@ static inline bool chunk_in_bounds(const struct World *world, const int3 chunk_p
 // returns the chunk at the specified position, NULL if unloaded
 static inline struct Chunk *world_get_chunk(const struct World *world, const int3 chunk_pos) {
     struct Chunk *c = world->chunks[chunk_to_world_index(chunk_pos)];
-    if (c == NULL || !c->flags.initialized || !simd_all(c->position == chunk_pos)) {
+    if (c == NULL || c->state < CHUNK_LOADED || !simd_all(c->position == chunk_pos)) {
         return NULL;
     } else {
         return c;

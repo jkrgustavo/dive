@@ -115,6 +115,14 @@ enum VoxelColor {
     INVALID = 255
 };
 
+enum ChunkState {
+    CHUNK_UNLOADED,
+    CHUNK_LOADING,
+    CHUNK_LOADED,
+    CHUNK_MESHING,
+    CHUNK_READY,
+};
+
 struct MeshScratch {
     // scratch bs_buffer for quad generation
     struct QuadBuf {
@@ -171,14 +179,10 @@ struct Chunk {
 
     struct MeshBuffer mesh;
 
+    enum ChunkState state;
+
     // whether the chunk is loaded/unloaded, etc.
     struct {
-        bool initialized: 1;
-        bool loading: 1;
-
-        bool meshing: 1;
-        bool meshed: 1;
-
         bool empty: 1;
         bool solid: 1;
         bool dirty: 1;
