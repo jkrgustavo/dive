@@ -42,8 +42,8 @@ vertex vs_out _main(
     uint corner = vid & 3u;
 
     uint64_t q = quads[face];
-    float3 pos = float3(uint3(q & 63u, (q>>6) & 63u, (q>>12) & 63u));
-    uint dir = uint((q>>30) & 7u);
+    float3 pos = float3(uint3(uint(q & 0xFFFul), uint((q >> 12) & 0xFFFul), uint((q >> 24) & 0xFFFul)));
+    uint dir = uint((q >> 48) & 0x7ul);
     float3 corner_val = corners[dir][corner];
 
     vs_out out;

@@ -73,7 +73,7 @@ static void build_palette(struct World *world) {
 static void chunk_job_run(struct Job *job) {
     struct ChunkJob *cjob = (struct ChunkJob *)job;
     if (cjob->type == JOB_GENERATE) {
-        chunk_generate(cjob->voxels, cjob->chunk_pos, cjob->seed);
+        chunk_generate(cjob->voxels, cjob->chunk_pos, cjob->seed, &cjob->solid, &cjob->empty);
     } else {
         chunk_mesh(&cjob->scratch);
     }
@@ -117,7 +117,6 @@ static void load_chunk(struct World *world, struct Chunk *cx, struct ChunkJob *c
     cjob->seed = world->seed;
     cx->state = CHUNK_LOADING;
     jobs_submit(world->job_system, &cjob->job);
-
 }
 
 static void world_recenter(struct World *world) {
@@ -166,7 +165,6 @@ void world_init(struct World *world, struct JobSystem *job_sys) {
     build_palette(world);
     build_offsets(world);
     world_recenter(world);
-
 }
 
 static void world_mesh(struct World *world) {
@@ -214,7 +212,6 @@ static void world_mesh(struct World *world) {
         cjob->job.run = chunk_job_run;
         cjob->chunk_pos = cx->position;
         jobs_submit(world->job_system, &cjob->job);
-
     }
 }
 
@@ -227,15 +224,11 @@ static void world_apply_finished_jobs(struct World *world) {
         bool same = simd_all(chunk->position == cjob->chunk_pos);
         bool fresh = same && chunk->version == cjob->version;
 
-        if (cjob->type == JOB_MESH && same) {
-            if (fresh) {
-                chunk_apply_mesh(chunk, cjob);
-            } else {
-                chunk_apply_mesh(chunk, cjob);
-                chunk->flags.dirty = true;
-            }
+        if (cjob->type == JOB_MESH && same && chunk->state == CHUNK_MESHING) {
+            chunk_apply_mesh(chunk, cjob, fresh);
+            if (!fresh) chunk->flags.dirty = true;
         }
-        if (fresh && cjob->type == JOB_GENERATE) {
+        if (fresh && cjob->type == JOB_GENERATE && chunk->state == CHUNK_LOADING) {
             chunk_apply_terrain(chunk, cjob);
             // mark any neighbor chunks in a 3x3x3 grid that are meshed as dirty
             for (u32 i = 0; i < 27; i++) {
@@ -268,7 +261,7 @@ void world_render(struct World *world, double3 camera_pos) {
         struct Chunk *cx = world_get_chunk(world, world->center + world->offsets[i]);
         if (cx == NULL) { continue; }
 
-        if (cx->state == CHUNK_READY)
+        if (cx->state == CHUNK_READY || cx->state == CHUNK_MESHING)
             chunk_render(cx, world->index_buffer, world->palette.palette_view, camera_pos);
     }
 }

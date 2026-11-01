@@ -16,11 +16,11 @@ static const int3 face_vertex_mask[] = {
 
 static u64 pack_quad(int3 p, u8 width, u8 height, u8 dir) {
     return  (u64)p.x
-         | ((u64)p.y    << 6)
-         | ((u64)p.z    << 12)
-         | ((u64)width  << 18)
-         | ((u64)height << 24)
-         | ((u64)dir    << 30);
+         | ((u64)p.y    << 12)
+         | ((u64)p.z    << 24)
+         | ((u64)width  << 36)
+         | ((u64)height << 42)
+         | ((u64)dir    << 48);
 }
 
 static void mesh_release(struct MeshBuffer *mesh) {
@@ -35,15 +35,22 @@ static void mesh_release(struct MeshBuffer *mesh) {
 }
 
 // thread safe
-void chunk_generate(u8 *data, int3 chunk_pos, i32 seed) {
+void chunk_generate(u8 *data, int3 chunk_pos, i32 seed, bool *solid, bool *empty) {
     i32 base_y = chunk_to_voxel(chunk_pos).y;
     if (base_y >= 118) {
+        *solid = false;
+        *empty = true;
         memset(data, 0, sizeof(u8) * CHUNK_VOLUME);
         return;
-    } else if (base_y < -30) {
+    } else if (base_y + CHUNK_DIM_Y < -25) {
+        *solid = true;
+        *empty = false;
         memset(data, GREY, sizeof(u8) * CHUNK_VOLUME);
         return;
     }
+
+    *solid = true;
+    *empty = true;
 
     fnl_state cont_n = fnlCreateState(); 
     fnl_state mask_n = fnlCreateState(); 
@@ -93,10 +100,13 @@ void chunk_generate(u8 *data, int3 chunk_pos, i32 seed) {
 
                 if (pos_w.y < ground_height && pos_w.y >= grass_height) {
                     data[idx] = GREEN;
+                    *empty = false;
                 } else if (pos_w.y < ground_height) {
                     data[idx] = GREY;
+                    *empty = false;
                 } else {
                     data[idx] = AIR;
+                    *solid = false;
                 }
             }
         }
@@ -110,6 +120,9 @@ void chunk_apply_terrain(struct Chunk *chunk, struct ChunkJob *cjob) {
     u8 *tmp = chunk->data;
     chunk->data = cjob->voxels;
     cjob->voxels = tmp;
+
+    chunk->flags.empty = cjob->empty;
+    chunk->flags.solid = cjob->solid;
 
     chunk->state = CHUNK_LOADED;
 }
@@ -172,6 +185,7 @@ bool chunk_prepare_mesh(struct Chunk *chunk, const struct Chunk *neighbors[27], 
     bs_assert(chunk && chunk->state >= CHUNK_LOADED, "Invalid chunk");
     if ((chunk->state == CHUNK_READY && !chunk->flags.dirty) 
             || chunk->flags.empty 
+            || chunk->flags.solid
             || chunk->state == CHUNK_MESHING)
         return false;
 
@@ -207,14 +221,14 @@ void chunk_mesh(struct MeshScratch *scratch) {
 }
 
 // updates in-flight flags
-void chunk_apply_mesh(struct Chunk *chunk, struct ChunkJob *cjob) {
+void chunk_apply_mesh(struct Chunk *chunk, struct ChunkJob *cjob, bool fresh) {
     mesh_release(&chunk->mesh);
 
     struct MeshScratch *scratch = &cjob->scratch;
 
     chunk->mesh.vertex_count = scratch->quads.count;
 
-    if (scratch->quads.count == 0) {
+    if (scratch->quads.count == 0 && fresh) {
         chunk->flags.solid = scratch->solid;
         chunk->flags.empty = !scratch->solid;
         if (chunk->flags.empty) {
@@ -252,7 +266,7 @@ void chunk_set_buried(struct Chunk *chunk) {
 
 void chunk_render(const struct Chunk *chunk, sg_buffer ibuf, sg_view palette, double3 cam_pos) {
     bs_assert(chunk);
-    bs_assert(chunk->state == CHUNK_READY, "Can't render unless the chunk is ready");
+    bs_assert(chunk->state == CHUNK_READY || chunk->state == CHUNK_MESHING, "Attempt to render an invalid chunk");
     if (chunk->mesh.vertex_count == 0) return;
 
     double3 chunk_pos = voxel_to_world(chunk_to_voxel(chunk->position));
@@ -279,7 +293,6 @@ void chunk_reset(struct Chunk *chunk) {
     assert(chunk);
     if (!chunk->flags.empty) {
         mesh_release(&chunk->mesh);
-        memset(chunk->data, 0, sizeof(u8) * CHUNK_VOLUME);
     }
 
     chunk->state = CHUNK_UNLOADED;

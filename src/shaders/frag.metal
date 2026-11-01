@@ -4,12 +4,12 @@ using namespace metal;
 
 struct vs_in {
     float3 local_pos;       // chunk_local, in voxels
-    float3 normal;          // face dir, const across the quad
+    float3 normal [[flat]];          // face dir, const across the quad
 };
 
 bool is_solid(device const uint8_t *padded, int3 vox_pos) {
     vox_pos += 1;
-    return padded[vox_pos.x + vox_pos.y*34 + vox_pos.z*34*34] != 0;
+    return padded[vox_pos.x + vox_pos.y*66 + vox_pos.z*66*66] != 0;
 }
 
 float corner_ao(device const uint8_t *padded, int3 a, int3 t1, int3 t2, int d1, int d2) {
@@ -40,8 +40,8 @@ fragment float4 _main(
     device const uint *palette [[buffer(9)]]
 ) {
     int3 vox = int3(floor(in.local_pos - 0.5 * in.normal));
-    vox = clamp(vox, int3(0), int3(31));
-    uint8_t data = voxel_dat[(vox.x+1) + (vox.y+1) * 34 + (vox.z+1) * 34*34];
+    vox = clamp(vox, int3(0), int3(63));
+    uint8_t data = voxel_dat[(vox.x+1) + (vox.y+1) * 66 + (vox.z+1) * 66*66];
     float3 color = unpack_unorm4x8_to_float(palette[data]).rgb;
     float light = get_light(voxel_dat, vox, in.local_pos, in.normal);
     return float4(color * light, 1.0);

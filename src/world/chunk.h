@@ -16,13 +16,13 @@
  * Chunk dimensions must *always* be a power of 2
  *
  * Quad vert packing scheme:
- *  | x pos  - 6
- *  | y pos  - 6
- *  | z pos  - 6
+ *  | x pos  - 12
+ *  | y pos  - 12
+ *  | z pos  - 12
  *  | width  - 6
  *  | height - 6
  *  | dir    - 3
- *  | reserved - 31
+ *  | reserved - 13
  *
  * Pos refers to the local coords within a chunk.
  * Fits inside a single u64, unpack inside vertex shader, and
@@ -31,9 +31,9 @@
 
 #define VOXEL_SIZE 0.1
 
-#define CHUNK_DIM_X 32
-#define CHUNK_DIM_Y 32
-#define CHUNK_DIM_Z 32
+#define CHUNK_DIM_X 64
+#define CHUNK_DIM_Y 64
+#define CHUNK_DIM_Z 64
 
 #define CHUNK_MASK simd_make_int3(CHUNK_DIM_X-1, CHUNK_DIM_Y-1, CHUNK_DIM_Z-1)
 #define CHUNK_SHIFT simd_make_int3(__builtin_ctz(CHUNK_DIM_X), __builtin_ctz(CHUNK_DIM_Y), __builtin_ctz(CHUNK_DIM_Z))
@@ -166,6 +166,8 @@ struct ChunkJob {
     u8 *voxels;
 
     struct MeshScratch scratch;
+    bool empty;
+    bool solid;
 
     // for main thread only. don't assign the same job to multiple workers
     bool in_use;
@@ -201,13 +203,13 @@ void chunk_init(struct Chunk *chunk, int3 chunk_pos);
 void chunk_reset(struct Chunk *chunk);
 void chunk_destroy(struct Chunk *chunk);
 
-void chunk_generate(u8 *data, int3 chunk_pos, i32 seed);
+void chunk_generate(u8 *data, int3 chunk_pos, i32 seed, bool *solid, bool *empty);
 void chunk_apply_terrain(struct Chunk *chunk, struct ChunkJob *cjob);
 
 void build_padded_data(u8 *padded, const struct Chunk *neighbors[27]);
 bool chunk_prepare_mesh(struct Chunk *chunk, const struct Chunk *neighbors[27], struct MeshScratch *scratch);
 void chunk_mesh(struct MeshScratch *scratch);
-void chunk_apply_mesh(struct Chunk *chunk, struct ChunkJob *cjob);
+void chunk_apply_mesh(struct Chunk *chunk, struct ChunkJob *cjob, bool fresh);
 void chunk_set_buried(struct Chunk *chunk);
 
 void chunk_render(const struct Chunk *chunk, sg_buffer ibuf, sg_view palette, double3 cam_pos);
