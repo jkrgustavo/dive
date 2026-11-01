@@ -157,31 +157,6 @@ static const i32 padded_stride[6] = {
     -PADDED_CHUNK_DIM_X,                        // DOWN  -y
 };
 
-void _build_padded_data(u8 *padded, const struct Chunk *neighbors[27]) {
-    // triple loop bc padded chunk dim isn't a power of two
-    for (i32 z = -1; z < PADDED_CHUNK_DIM_Z-1; z++) {
-        for (i32 y = -1; y < PADDED_CHUNK_DIM_Y-1; y++) {
-            for (i32 x = -1; x < PADDED_CHUNK_DIM_X-1; x++) {
-                int3 vox = simd_make_int3(x, y, z);
-                int3 offset = voxel_to_chunk(vox) + 1;
-                const struct Chunk *neighbor_chunk = neighbors[offset.x + offset.y*3 + offset.z*3*3];
-                u8 vox_data;
-                if (!neighbor_chunk) { 
-                    vox_data = INVALID; 
-                } else if (neighbor_chunk->flags.empty) {
-                    vox_data = AIR;
-                } else {
-                    vox_data = neighbor_chunk->data[local_to_chunk_index(voxel_to_local(vox))];
-                }
-                u32 padded_idx = 
-                    (x+1) + (y+1) * PADDED_CHUNK_DIM_X + (z+1) * (PADDED_CHUNK_DIM_X * PADDED_CHUNK_DIM_Y);
-
-                padded[padded_idx] = vox_data;
-            }
-        }
-    }
-}
-
 static inline const struct Chunk *neighbor_at(const struct Chunk *neighbors[27], int3 off) {
     return neighbors[(off.x + 1) + (off.y + 1) * 3 + (off.z + 1) * 9];
 }
