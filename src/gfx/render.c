@@ -1,6 +1,7 @@
 #include "render.h"
+#include "utils/util.h"
 
-void renderer_init(struct Renderer *renderer) {
+bool renderer_init(struct Renderer *renderer) {
     renderer->pass_action = (sg_pass_action) {
         .depth = {
             .clear_value = 0,
@@ -16,7 +17,7 @@ void renderer_init(struct Renderer *renderer) {
     assert(vs_buffer);
     char *fs_buffer = read_file("src/shaders/frag.metal");
     assert(fs_buffer);
-    sg_shader shd = sg_make_shader(&(sg_shader_desc){
+    renderer->shader = sg_make_shader(&(sg_shader_desc){
         .label = "Voxel",
         .vertex_func.source = vs_buffer,
         .fragment_func.source = fs_buffer,
@@ -49,7 +50,7 @@ void renderer_init(struct Renderer *renderer) {
 
     renderer->pipeline = sg_make_pipeline(&(sg_pipeline_desc){
         .label = "Voxel",
-        .shader = shd,
+        .shader = renderer->shader,
         .index_type = SG_INDEXTYPE_NONE,
         .depth = { 
             .compare = SG_COMPAREFUNC_GREATER_EQUAL, 
@@ -58,11 +59,15 @@ void renderer_init(struct Renderer *renderer) {
         .cull_mode = SG_CULLMODE_BACK,
         .face_winding = SG_FACEWINDING_CCW,
     });
-
-    assert(sg_query_shader_state(shd) == SG_RESOURCESTATE_VALID);
-    assert(sg_query_pipeline_state(renderer->pipeline) == SG_RESOURCESTATE_VALID);
     free(vs_buffer);
     free(fs_buffer);
+
+    bool shader_valid = sg_query_shader_state(renderer->shader) == SG_RESOURCESTATE_VALID;
+    bool pipe_valid = sg_query_pipeline_state(renderer->pipeline) == SG_RESOURCESTATE_VALID;
+
+    if (!shader_valid || !pipe_valid) return false;
+
+    return true;
 }
 
 void renderer_begin_pass(struct Renderer *renderer, simd_float4x4 cam_proj, simd_float4x4 cam_view) {
@@ -76,4 +81,24 @@ void renderer_end_pass() {
     simgui_render();
     sg_end_pass();
     sg_commit();
+}
+ 
+void renderer_reload(struct Renderer *renderer) {
+    sg_pipeline old_pipeline = renderer->pipeline;
+    sg_shader old_shader = renderer->shader;
+
+    if (!renderer_init(renderer)) {
+        fprintf(stderr, "Error creating pipeline/shader, reusing older version.");
+        renderer->shader = old_shader;
+        renderer->pipeline = old_pipeline;
+    } else {
+        sg_destroy_shader(old_shader);
+        sg_destroy_pipeline(old_pipeline);
+    }
+
+}
+
+void renderer_destroy(struct Renderer *renderer) {
+    sg_destroy_shader(renderer->shader);
+    sg_destroy_pipeline(renderer->pipeline);
 }

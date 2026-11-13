@@ -2,7 +2,7 @@
 #include <tgmath.h>
 
 #include "world.h"
-#include "jobs.h"
+#include "utils/jobs.h"
 
 static struct ChunkJob *chunk_job_get(struct World *world, enum ChunkJobType type) {
     // chunks are generated first, this prevents generation from hogging the pool
@@ -121,7 +121,7 @@ static void world_recenter(struct World *world) {
 
 void world_init(struct World *world, struct JobSystem *job_sys) {
     bs_assert(world->chunks == NULL, "Multiple calls to init");
-    world->seed = 100;
+    world->seed = 11;
 
     world->chunk_count = WORLD_VOLUME;
 
@@ -240,6 +240,13 @@ void world_render(struct World *world, double3 camera_pos) {
         if (cx->state == CHUNK_READY || cx->state == CHUNK_MESHING)
             chunk_render(cx, world->palette.palette_view, camera_pos);
     }
+}
+
+void world_reload(struct World *world) {
+    sg_destroy_view(world->palette.palette_view);
+    sg_destroy_buffer(world->palette.palette_buf);
+
+    build_palette(world);
 }
 
 void world_destroy(struct World *world) {

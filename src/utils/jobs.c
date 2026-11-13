@@ -48,7 +48,7 @@ static struct Job *queue_pop_wait(struct JobQueue *queue) {
     while (!queue->head && !queue->shutdown) {
         pthread_cond_wait(&queue->not_empty, &queue->lock);
     }
-    struct Job *job = queue->shutdown ? NULL : queue_take_locked(queue);
+    struct Job *job = queue_take_locked(queue);
     pthread_mutex_unlock(&queue->lock);
     return job;
 }
@@ -92,6 +92,24 @@ void jobs_init(struct JobSystem *job_sys, u32 thread_count) {
     }
 }
 
+void jobs_start(struct JobSystem *job_sys, u32 thread_count) {
+    if (thread_count == 0) {
+        u64 cores = sysconf(_SC_NPROCESSORS_ONLN);
+        // leave a core for the main thread
+        thread_count = cores > 1 ? (u32)cores - 1 : 1;
+    }
+
+    job_sys->pending.shutdown = false;
+    job_sys->thread_count = thread_count;
+    job_sys->threads = malloc(sizeof(pthread_t) * thread_count);
+    bs_assert(job_sys->threads, "Failed to allocate threadpool");
+
+    for (u32 i = 0; i < thread_count; i++) {
+        i32 err = pthread_create(&job_sys->threads[i], NULL, worker_main, job_sys);
+        bs_assert(err == 0, "Error creating thread. Code: %d", err);
+    }
+}
+
 void jobs_submit(struct JobSystem *job_sys, struct Job *job) {
     bs_assert(job && job->run, "NULL job, or NULL job->run");
     queue_push(&job_sys->pending, job);
@@ -99,6 +117,22 @@ void jobs_submit(struct JobSystem *job_sys, struct Job *job) {
 
 struct Job *jobs_poll(struct JobSystem *job_sys) {
     return queue_try_pop(&job_sys->done);
+}
+
+void jobs_stop(struct JobSystem *job_sys) {
+    pthread_mutex_lock(&job_sys->pending.lock);
+    job_sys->pending.shutdown = true;
+    // wake workers so they see the flag
+    pthread_cond_broadcast(&job_sys->pending.not_empty);
+    pthread_mutex_unlock(&job_sys->pending.lock);
+
+    for (u32 i = 0; i < job_sys->thread_count; i++) {
+        pthread_join(job_sys->threads[i], NULL);
+    }
+
+    free(job_sys->threads);
+    job_sys->threads = NULL;
+    job_sys->thread_count = 0;
 }
 
 void jobs_destroy(struct JobSystem *job_sys) {

@@ -124,6 +124,7 @@ static inline bool world_solid_at(const struct World *world, const int3 vox_pos)
 void world_init(struct World *world, struct JobSystem *job_sys);
 void world_update(struct World *world, double3 player_pos);
 void world_render(struct World *world, double3 camera_pos);
+void world_reload(struct World *world);
 void world_destroy(struct World *world);
 
 #endif /* WORLD_H */

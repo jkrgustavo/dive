@@ -43,11 +43,17 @@ struct JobSystem {
 // starts workers. if the count is 0, picks cores-1. minimum 1
 void jobs_init(struct JobSystem *job_sys, u32 thread_count);
 
+// restarts workers. Assumes queues are intact, otherwise the same as jobs_init
+void jobs_start(struct JobSystem *job_sys, u32 thread_count);
+
 // submit a job to workers. set job->run and fields first
 void jobs_submit(struct JobSystem *job_sys, struct Job *job);
 
 // returns a finished job or NULL if none are finished. doesn't block
 struct Job *jobs_poll(struct JobSystem *job_sys);
+
+// stops workers and waits for them to exit. Leaves the queues/mutexes alone
+void jobs_stop(struct JobSystem *job_sys);
 
 // stops workers and waits for them to exit. workers finish their jobs first.
 void jobs_destroy(struct JobSystem *job_sys);

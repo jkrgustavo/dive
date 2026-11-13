@@ -205,7 +205,7 @@ bool chunk_prepare_mesh(struct Chunk *chunk, const struct Chunk *neighbors[27], 
     bs_assert(chunk && chunk->state >= CHUNK_LOADED, "Invalid chunk");
     if ((chunk->state == CHUNK_READY && !chunk->flags.dirty) 
             || chunk->flags.empty 
-            || chunk->flags.solid
+            // || chunk->flags.solid
             || chunk->state == CHUNK_MESHING)
         return false;
 

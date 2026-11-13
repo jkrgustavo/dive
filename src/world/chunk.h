@@ -2,7 +2,7 @@
 #define CHUNK_H
 
 #include "utils/util.h"
-#include "jobs.h"
+#include "utils/jobs.h"
 
 /* Types of coordinates:
  *  | World - double3 - unbounded
