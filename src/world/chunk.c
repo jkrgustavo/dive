@@ -117,12 +117,18 @@ void chunk_generate(u8 *data, int3 chunk_pos, i32 seed, bool *solid, bool *empty
 // swap job's and chunk's buffers
 void chunk_apply_terrain(struct Chunk *chunk, struct ChunkJob *cjob) {
     bs_assert(chunk && cjob);
-    u8 *tmp = chunk->data;
-    chunk->data = cjob->voxels;
-    cjob->voxels = tmp;
-
     chunk->flags.empty = cjob->empty;
     chunk->flags.solid = cjob->solid;
+
+    if (!chunk->flags.empty) {
+        u8 *tmp = chunk->data;
+        chunk->data = cjob->voxels;
+        cjob->voxels = tmp;
+    } else {
+        free(chunk->data);
+        chunk->data = NULL;
+    }
+
 
     chunk->state = CHUNK_LOADED;
 }
@@ -137,6 +143,7 @@ void chunk_init(struct Chunk *chunk, int3 chunk_pos) {
     chunk->flags.empty = false;
     chunk->flags.solid = false;
     chunk->flags.dirty = false;
+    chunk->flags.buried = false;
 }
 
 void chunk_set_block(struct Chunk *chunk, int3 local_pos, enum VoxelColor id) {
@@ -162,7 +169,7 @@ static inline const struct Chunk *neighbor_at(const struct Chunk *neighbors[27],
 }
 
 static inline u8 sample_data(const struct Chunk *chunk, int3 local_pos) {
-    if (!chunk) return INVALID;
+    if (!chunk || chunk->flags.buried) return INVALID;
 
     if (chunk->flags.empty) return AIR;
 
@@ -189,7 +196,7 @@ void build_padded_data(u8 *padded, const struct Chunk *neighbors[27]) {
                         simd_make_int3(0, local.y, local.z));
 
                 const struct Chunk *chunk = neighbor_at(neighbors, offset);
-                if (!chunk) {
+                if (!chunk || chunk->flags.buried) {
                     memset(row + 1, INVALID, CHUNK_DIM.x);
                 } else if (chunk->flags.empty) {
                     memset(row + 1, AIR, CHUNK_DIM.x);
@@ -205,7 +212,7 @@ bool chunk_prepare_mesh(struct Chunk *chunk, const struct Chunk *neighbors[27], 
     bs_assert(chunk && chunk->state >= CHUNK_LOADED, "Invalid chunk");
     if ((chunk->state == CHUNK_READY && !chunk->flags.dirty) 
             || chunk->flags.empty 
-            // || chunk->flags.solid
+            || chunk->flags.buried
             || chunk->state == CHUNK_MESHING)
         return false;
 
@@ -280,7 +287,10 @@ void chunk_apply_mesh(struct Chunk *chunk, struct ChunkJob *cjob, bool fresh) {
 
 void chunk_set_buried(struct Chunk *chunk) {
     mesh_release(&chunk->mesh);
+    free(chunk->data);
+    chunk->data = NULL;
     chunk->state = CHUNK_READY;
+    chunk->flags.buried = true;
     chunk->flags.dirty = false;
 }
 
@@ -310,7 +320,7 @@ void chunk_render(const struct Chunk *chunk, sg_view palette, double3 cam_pos) {
 
 void chunk_reset(struct Chunk *chunk) {
     assert(chunk);
-    if (!chunk->flags.empty) {
+    if (!chunk->flags.empty && !chunk->flags.buried) {
         mesh_release(&chunk->mesh);
     }
 
@@ -318,6 +328,7 @@ void chunk_reset(struct Chunk *chunk) {
     chunk->flags.dirty = false;
     chunk->flags.empty = false;
     chunk->flags.solid = false;
+    chunk->flags.buried = false;
     chunk->position = simd_make_int3(0, 0, 0);
 
     chunk->version++;

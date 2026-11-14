@@ -193,6 +193,7 @@ struct Chunk {
         bool empty: 1;
         bool solid: 1;
         bool dirty: 1;
+        bool buried: 1;
     } flags;
 
 };

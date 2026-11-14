@@ -36,7 +36,7 @@ static struct {
 
     // time new build has been unchanged
     double pending_time;
-#endif
+#endif /* HOT */
 } host;
 
 #ifdef HOT
@@ -134,7 +134,7 @@ static void check_reload() {
     }
 }
 
-#else   /* DIVE_HOT_RELOAD */  // Static build
+#else   /* HOT */  // Static build
 
 struct DiveAPI dive_get_api();
 static void check_reload() {}
@@ -143,7 +143,7 @@ static bool load_dive() {
     return true;
 }
 
-#endif  /* DIVE_HOT_RELOAD */
+#endif  /* HOT */
 
 static void init() {
     sg_setup(&(sg_desc){ 

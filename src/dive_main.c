@@ -28,7 +28,8 @@ static struct DiveState *init_cb() {
 
     input_init(&state->input);
     player_init(&state->player, (double3){ 0.0, 5.0, 0.0 });
-    bs_assert(renderer_init(&state->renderer), "Error initializing pipeline!");
+    bool ok = renderer_init(&state->renderer);
+    bs_assert(ok, "Error initializing the renderer!");
     camera_init(&state->camera, &state->player, radians(60.0), 0.01, 1000.0);
     jobs_init(&state->jobs, 0);
     world_init(&state->world, &state->jobs);

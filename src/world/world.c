@@ -163,16 +163,23 @@ static void world_mesh(struct World *world) {
             neighbors[n] = world_get_chunk(world, neighbor_pos);
 
             bool face_neighbor = simd_reduce_add(simd_abs(neighbor_offset)) == 1;
-            if (neighbors[n] && face_neighbor && (!cx->flags.solid || !neighbors[n]->flags.solid)) 
+            if (neighbors[n] && face_neighbor && (!cx->flags.solid || !neighbors[n]->flags.solid)) {
                 buried = false;
+            }
 
             if (!neighbors[n] && offset_in_view(neighbor_pos - world->center)) 
                 neighbor_loading = true;
         }
-
         if (neighbor_loading) continue;
-        if (buried) {
+
+        if (buried && !cx->flags.buried) {  // Mark the chunk buried
             chunk_set_buried(cx);
+            continue;
+        } else if (!buried && cx->flags.buried) {   // chunk no longer buried
+            chunk_reset(cx);
+            continue;
+        } else if (buried && cx->flags.buried && cx->flags.dirty) {    // dirty chunk is still buried
+            cx->flags.dirty = false;
             continue;
         }
 
