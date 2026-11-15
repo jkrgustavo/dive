@@ -53,10 +53,11 @@ static void frame_cb(struct DiveState *state) {
     world_update(&state->world, state->player.position);
     debug_update(&state->debug, &state->input, &state->player, &state->world);
 
-    renderer_begin_pass(&state->renderer, state->camera.proj, state->camera.view);
-    world_render(&state->world, state->camera.pos);
+    struct ChunkDraw draws[WORLD_VOLUME];
+    u32 draw_count = world_collect_draws(&state->world, state->camera.pos, draws, WORLD_VOLUME);
+
     debug_draw(&state->debug, &state->camera, &state->input, &state->world, &state->player);
-    renderer_end_pass();
+    renderer_frame(&state->renderer, state->camera.proj, state->camera.view, draws, draw_count);
 
     input_end_frame(&state->input);
 }
@@ -75,7 +76,6 @@ static void event_cb(struct DiveState *state, const sapp_event* event) {
 }
 
 // TODO: Add a size check
-// TODO: Destroy and rebuild pipelines
 static void reload_cb(struct DiveState *state) {
     jobs_start(&state->jobs, 0);
     renderer_reload(&state->renderer);

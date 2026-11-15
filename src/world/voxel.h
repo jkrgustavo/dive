@@ -44,14 +44,19 @@ enum VoxelColor {
     INVALID = 255
 };
 
-struct Palette {
-    sg_buffer buf;
-    sg_view view;
+enum MaterialProps {
+    MAT_OPAQUE   = 1,
+    MAT_COLLIDES = 2,
+    MAT_LIQUID   = 4
 };
 
-struct Palette palette_build();
-void palette_destroy(struct Palette *palette);
+struct Material {
+    u32 color;
+    u8 flags;
+};
 
+extern const struct Material materials[256];
 
+void palette_colors(u32 out[256]);
 
 #endif  /* VOXEL_H */

@@ -1,7 +1,6 @@
 #include "chunk.h"
-#include "utils/mat_math.h"
+#include "gfx/chunk_mesh.h"
 #include <ba_buffer.h>
-#include <simd/geometry.h>
 #include <FastNoiseLite.h>
 
 
@@ -21,17 +20,6 @@ static u64 pack_quad(int3 p, u8 width, u8 height, u8 dir) {
          | ((u64)width  << 36)
          | ((u64)height << 42)
          | ((u64)dir    << 48);
-}
-
-static void mesh_release(struct MeshBuffer *mesh) {
-    sg_destroy_view(mesh->vbuf_view);
-    sg_destroy_buffer(mesh->vbuf);
-
-    sg_destroy_view(mesh->paddbuf_view);
-    sg_destroy_buffer(mesh->paddbuf);
-    mesh->vertex_count = 0;
-
-    *mesh = (struct MeshBuffer){0};
 }
 
 // thread safe
@@ -171,29 +159,29 @@ void build_padded_data(voxel *padded, const struct Chunk *neighbors[27]) {
     // double loop bc padded chunk dim isn't a power of two
     for (i32 z = -1; z < PADDED_CHUNK_DIM_Z-1; z++) {
         for (i32 y = -1; y < PADDED_CHUNK_DIM_Y-1; y++) {
-                int3 vox    = simd_make_int3(0, y, z);
-                int3 offset = voxel_to_chunk(vox);
-                int3 local  = voxel_to_local(vox);
+            int3 vox    = simd_make_int3(0, y, z);
+            int3 offset = voxel_to_chunk(vox);
+            int3 local  = voxel_to_local(vox);
 
-                voxel *row = padded 
-                    + (y+1) * PADDED_CHUNK_DIM_X + (z+1) * PADDED_CHUNK_DIM_X * PADDED_CHUNK_DIM_Y;
-                
-                int3 off_right = offset + dir_offset[RIGHT];
-                row[0] = chunk_sample_data(neighbor_at(neighbors, off_right), 
-                            simd_make_int3(CHUNK_DIM.x - 1, local.y, local.z));
+            voxel *row = padded 
+                + (y+1) * PADDED_CHUNK_DIM_X + (z+1) * PADDED_CHUNK_DIM_X * PADDED_CHUNK_DIM_Y;
 
-                int3 off_left = offset + dir_offset[LEFT];
-                row[PADDED_CHUNK_DIM_X - 1] = chunk_sample_data(neighbor_at(neighbors, off_left),
-                        simd_make_int3(0, local.y, local.z));
+            int3 off_right = offset + dir_offset[RIGHT];
+            row[0] = chunk_sample_data(neighbor_at(neighbors, off_right), 
+                    simd_make_int3(CHUNK_DIM.x - 1, local.y, local.z));
 
-                const struct Chunk *chunk = neighbor_at(neighbors, offset);
-                if (!chunk || chunk->flags.buried) {
-                    memset(row + 1, INVALID, CHUNK_DIM.x);
-                } else if (chunk->flags.empty) {
-                    memset(row + 1, AIR, CHUNK_DIM.x);
-                } else {
-                    memcpy(row + 1, chunk->data + local_to_chunk_index(local), CHUNK_DIM.x);
-                }
+            int3 off_left = offset + dir_offset[LEFT];
+            row[PADDED_CHUNK_DIM_X - 1] = chunk_sample_data(neighbor_at(neighbors, off_left),
+                    simd_make_int3(0, local.y, local.z));
+
+            const struct Chunk *chunk = neighbor_at(neighbors, offset);
+            if (!chunk || chunk->flags.buried) {
+                memset(row + 1, INVALID, CHUNK_DIM.x);
+            } else if (chunk->flags.empty) {
+                memset(row + 1, AIR, CHUNK_DIM.x);
+            } else {
+                memcpy(row + 1, chunk->data + local_to_chunk_index(local), CHUNK_DIM.x);
+            }
 
         }
     }
@@ -221,15 +209,18 @@ void chunk_mesh(struct MeshScratch *scratch) {
     for (size_t vox = 0; vox < CHUNK_VOLUME; vox++) {
         int3 local_pos = chunk_index_to_local(vox);
         i32 vox_padded_idx = 
-            (local_pos.x+1) + (local_pos.y+1) * PADDED_CHUNK_DIM_X + (local_pos.z+1) * PADDED_CHUNK_DIM_X * PADDED_CHUNK_DIM_Y;
+            (local_pos.x+1) 
+            + (local_pos.y+1) * PADDED_CHUNK_DIM_X 
+            + (local_pos.z+1) * PADDED_CHUNK_DIM_X * PADDED_CHUNK_DIM_Y;
 
-        if (scratch->padded_data[vox_padded_idx] == AIR) {
+        if (!(materials[scratch->padded_data[vox_padded_idx]].flags & MAT_OPAQUE)) 
             scratch->solid = false;
+
+        if (scratch->padded_data[vox_padded_idx] == AIR) 
             continue;
-        }
 
         for (u32 dir = 0; dir < 6; dir++) {
-            if (scratch->padded_data[vox_padded_idx + padded_stride[dir]] != AIR)
+            if ((materials[scratch->padded_data[vox_padded_idx + padded_stride[dir]]].flags & MAT_OPAQUE))
                 continue;
 
             u64 quad = pack_quad(local_pos + face_vertex_mask[dir], 1, 1, dir);
@@ -240,11 +231,10 @@ void chunk_mesh(struct MeshScratch *scratch) {
 
 // updates in-flight flags
 void chunk_apply_mesh(struct Chunk *chunk, struct MeshScratch *scratch, bool fresh) {
-    mesh_release(&chunk->mesh);
-
-    chunk->mesh.vertex_count = scratch->quads.count;
+    renderer_mesh_destroy(&chunk->mesh);
 
     if (scratch->quads.count == 0 && fresh) {
+        // TODO: this counts transparent blocks as empty. Don't set empty based off of solid
         chunk->flags.solid = scratch->solid;
         chunk->flags.empty = !scratch->solid;
         if (chunk->flags.empty) {
@@ -255,27 +245,14 @@ void chunk_apply_mesh(struct Chunk *chunk, struct MeshScratch *scratch, bool fre
         return;
     }
 
-    chunk->mesh.vbuf = sg_make_buffer(&(sg_buffer_desc) {
-        .usage.storage_buffer = true,
-        .data = { .ptr = scratch->quads.items, .size = scratch->quads.count * sizeof(u64) }
-    });
-    chunk->mesh.vbuf_view = sg_make_view(&(sg_view_desc) {
-        .storage_buffer.buffer = chunk->mesh.vbuf,
-    });
-
-    chunk->mesh.paddbuf = sg_make_buffer(&(sg_buffer_desc) {
-        .usage.storage_buffer = true,
-        .data = { .ptr = scratch->padded_data, .size = PADDED_CHUNK_VOLUME * sizeof(voxel) }
-    });
-    chunk->mesh.paddbuf_view = sg_make_view(&(sg_view_desc) {
-        .storage_buffer.buffer = chunk->mesh.paddbuf
-    });
+    chunk->mesh = renderer_mesh_create(
+            scratch->quads.items, scratch->quads.count, scratch->padded_data, PADDED_CHUNK_VOLUME);
 
     chunk->state = CHUNK_READY;
 }
 
 void chunk_set_buried(struct Chunk *chunk) {
-    mesh_release(&chunk->mesh);
+    renderer_mesh_destroy(&chunk->mesh);
     free(chunk->data);
     chunk->data = NULL;
     chunk->state = CHUNK_READY;
@@ -283,34 +260,10 @@ void chunk_set_buried(struct Chunk *chunk) {
     chunk->flags.dirty = false;
 }
 
-void chunk_render(const struct Chunk *chunk, sg_view palette, double3 cam_pos) {
-    bs_assert(chunk);
-    bs_assert(chunk->state == CHUNK_READY || chunk->state == CHUNK_MESHING, "Attempt to render an invalid chunk");
-    if (chunk->mesh.vertex_count == 0) return;
-
-    double3 chunk_pos = voxel_to_world(chunk_to_voxel(chunk->position));
-    double3 rel_pos_d = chunk_pos - cam_pos;
-    float3 rel_pos = simd_float(rel_pos_d);
-    float3 scale = simd_make_float3(VOXEL_SIZE, VOXEL_SIZE, VOXEL_SIZE);
-
-    simd_float4x4 model_mat = simd_mul(mat_translation(rel_pos), mat_scale(scale));
-
-    sg_apply_bindings(&(sg_bindings){
-        .views = { 
-            [0] = chunk->mesh.vbuf_view, 
-            [1] = chunk->mesh.paddbuf_view,
-            [2] = palette
-        }
-    });
-    // view and proj mats are applied in the begin_pass function
-    sg_apply_uniforms(1, &SG_RANGE(model_mat));
-    sg_draw(0, chunk->mesh.vertex_count * 6, 1);
-}
-
 void chunk_reset(struct Chunk *chunk) {
     assert(chunk);
     if (!chunk->flags.empty && !chunk->flags.buried) {
-        mesh_release(&chunk->mesh);
+        renderer_mesh_destroy(&chunk->mesh);
     }
 
     chunk->state = CHUNK_UNLOADED;
@@ -326,7 +279,7 @@ void chunk_reset(struct Chunk *chunk) {
 void chunk_destroy(struct Chunk *chunk) {
     assert(chunk);
     if (!chunk->flags.empty) {
-        mesh_release(&chunk->mesh);
+        renderer_mesh_destroy(&chunk->mesh);
         free(chunk->data);
     }
 

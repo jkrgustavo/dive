@@ -63,7 +63,7 @@ static f64 sweep_axis(const struct World *world, struct AABB pbox, struct AABB r
         for (i32 y = low.y; y <= high.y; y++) {
             for (i32 z = low.z; z <= high.z; z++) {
                 int3 vox_pos = simd_make_int3(x, y, z);
-                if (!world_solid_at(world, vox_pos)) continue;
+                if (!(materials[world_sample_data(world, vox_pos)].flags & MAT_COLLIDES)) continue;
                 struct AABB vbox = { .min = voxel_to_world(vox_pos), .max = voxel_to_world(vox_pos) + VOXEL_SIZE };
                 intent = clip_axis(pbox, vbox, axis, intent);
             }

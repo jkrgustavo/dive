@@ -2,6 +2,7 @@
 #define CHUNK_H
 
 #include "utils/util.h"
+#include "gfx/chunk_mesh.h"
 
 #include "voxel.h"
 
@@ -67,8 +68,6 @@ static inline int3 chunk_index_to_local(const u32 idx) {
     );
 }
 
-
-
 // takes a local voxel pos and checks 
 static inline bool voxel_in_chunk(const int3 local_pos) {
     return simd_all(local_pos >= 0) && simd_all(local_pos < CHUNK_DIM);
@@ -79,8 +78,6 @@ static inline bool voxel_in_chunk(const int3 local_pos) {
 #define PADDED_CHUNK_DIM_Z (CHUNK_DIM_Z+2)
 
 #define PADDED_CHUNK_VOLUME ((PADDED_CHUNK_DIM_X) * (PADDED_CHUNK_DIM_Y) * (PADDED_CHUNK_DIM_Z))
-
-
 
 enum ChunkState {
     CHUNK_UNLOADED,
@@ -106,16 +103,6 @@ struct MeshScratch {
 
     // padded chunk data to be sent to the GPU
     voxel padded_data[PADDED_CHUNK_DIM_X * PADDED_CHUNK_DIM_Y * PADDED_CHUNK_DIM_Z];
-};
-
-struct MeshBuffer {
-    u32 vertex_count;
-
-    sg_view vbuf_view;
-    sg_buffer vbuf;
-
-    sg_view paddbuf_view;
-    sg_buffer paddbuf;
 };
 
 struct Chunk {
@@ -165,6 +152,5 @@ void chunk_mesh(struct MeshScratch *scratch);
 void chunk_apply_mesh(struct Chunk *chunk, struct MeshScratch *scratch, bool fresh);
 void chunk_set_buried(struct Chunk *chunk);
 
-void chunk_render(const struct Chunk *chunk, sg_view palette, double3 cam_pos);
 
 #endif  /* CHUNK_H */

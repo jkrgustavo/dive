@@ -110,9 +110,6 @@ struct World {
         u32 in_flight, max;
     } gen_limit;
 
-    // Color palette sg_buffer & view
-    struct Palette palette;
-
     // array of chunks that are currently loaded
     struct Chunk **chunks;
 };
@@ -132,21 +129,15 @@ static inline struct Chunk *world_get_chunk(const struct World *world, const int
     }     
 }
 
-// TODO: Redo once materials are implemented
 // returns the voxel data at the specified voxel position
 static inline voxel world_sample_data(const struct World *world, const int3 vox_pos) {
     struct Chunk *c = world_get_chunk(world, voxel_to_chunk(vox_pos));
     return chunk_sample_data(c, voxel_to_local(vox_pos));
 }
 
-static inline bool world_solid_at(const struct World *world, const int3 vox_pos) {
-    return world_sample_data(world, vox_pos) != AIR;
-}
-
 void world_init(struct World *world, struct JobSystem *job_sys);
 void world_update(struct World *world, double3 player_pos);
-void world_render(struct World *world, double3 camera_pos);
-void world_reload(struct World *world);
+u32  world_collect_draws(struct World *world, double3 camera_pos, struct ChunkDraw *out, u32 max);
 void world_destroy(struct World *world);
 
 #endif /* WORLD_H */

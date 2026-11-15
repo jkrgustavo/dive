@@ -1,30 +1,22 @@
 #include "voxel.h"
 
-struct Palette palette_build() {
-    u32 palette[256] = {0};
-    palette[RED] = 0xFF0000FF;
-    palette[ORANGE] = 0xFF0099FF;
-    palette[YELLOW] = 0xFF00FFFF;
-    palette[GREEN] = 0xFF33DD33;
-    palette[BLUE] = 0xFFFF0000;
-    palette[PURPLE] = 0xFFFF00FF;
-    palette[GREY] = 0xFFAAAAAA;
-    palette[INVALID] = palette[PURPLE];
+#define MAT(abgr, flag) { (abgr), (u8)((flag) | (((abgr) >> 24) == 0xFF ? MAT_OPAQUE : 0))}
 
-    struct Palette p = {0};
+const struct Material materials[256] = {
+    [AIR]       = {0},
+    [RED]       = MAT(0xFF0000FF, MAT_COLLIDES),
+    [ORANGE]    = MAT(0xFF0099FF, MAT_COLLIDES),
+    [YELLOW]    = MAT(0xFF00FFFF, MAT_COLLIDES),
+    [GREEN]     = MAT(0xFF33DD33, MAT_COLLIDES),
+    [BLUE]      = MAT(0xFFFF0000, MAT_COLLIDES),
+    [PURPLE]    = MAT(0xFFFF00FF, MAT_COLLIDES),
+    [GREY]      = MAT(0xFFAAAAAA, MAT_COLLIDES),
+    [INVALID]   = MAT(0xFFFF00FF, MAT_COLLIDES),
+};
 
-    p.buf = sg_make_buffer(&(sg_buffer_desc) {
-        .data = SG_RANGE(palette),
-        .usage.storage_buffer = true
-    });
-    p.view = sg_make_view(&(sg_view_desc) {
-        .storage_buffer.buffer = p.buf
-    });
-
-    return p;
-}
-
-void palette_destroy(struct Palette *palette) {
-    sg_destroy_view(palette->view);
-    sg_destroy_buffer(palette->buf);
+void palette_colors(u32 out[256]) {
+    for (u32 i = 1; i < 256; i++) {
+        struct Material mat = materials[i];
+        out[i] = mat.color;
+    }
 }

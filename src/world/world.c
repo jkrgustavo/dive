@@ -2,6 +2,7 @@
 #include <tgmath.h>
 
 #include "world.h"
+#include "gfx/chunk_mesh.h"
 #include "utils/jobs.h"
 
 static struct ChunkJob *chunk_job_get(struct World *world, enum ChunkJobType type) {
@@ -117,7 +118,6 @@ void world_init(struct World *world, struct JobSystem *job_sys) {
     world->gen_limit.max = floor(JOB_POOL_SIZE / 2.0) + 2;
     world->gen_limit.in_flight = 0;
 
-    world->palette = palette_build();
     build_offsets(world);
     world_recenter(world);
 }
@@ -218,20 +218,22 @@ void world_update(struct World *world, double3 player_pos) {
     world_mesh(world);
 }
 
-void world_render(struct World *world, double3 camera_pos) {
-    for (u32 i = 0; i < world->offset_count; i++) {
+u32 world_collect_draws(struct World *world, double3 camera_pos, struct ChunkDraw *out, u32 max) {
+    u32 count = 0;
+    for (u32 i = 0; i < world->offset_count && count < max; i++) {
         struct Chunk *cx = world_get_chunk(world, world->center + world->offsets[i]);
-        if (cx == NULL) { continue; }
 
-        if (cx->state == CHUNK_READY || cx->state == CHUNK_MESHING)
-            chunk_render(cx, world->palette.view, camera_pos);
+        if (!cx || cx->state < CHUNK_MESHING || cx->mesh.quad_count == 0) continue;
+
+        double3 chunk_pos = voxel_to_world(chunk_to_voxel(cx->position));
+        float3 rel_pos = simd_float(chunk_pos - camera_pos);
+
+        out[count++] = (struct ChunkDraw) {
+            .mesh = &cx->mesh,
+            .rel_pos = rel_pos
+        };
     }
-}
-
-void world_reload(struct World *world) {
-    palette_destroy(&world->palette);
-
-    world->palette = palette_build();
+    return count;
 }
 
 void world_destroy(struct World *world) {
@@ -241,7 +243,6 @@ void world_destroy(struct World *world) {
         free(world->chunks[c]);
         world->chunks[c] = NULL;
     }
-    palette_destroy(&world->palette);
     free(world->chunks);
     free(world->offsets);
     for (u32 i = 0; i < JOB_POOL_SIZE; i++) {
