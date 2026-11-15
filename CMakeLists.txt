@@ -56,10 +56,10 @@ if(HAVE_IPO)
 endif()
 
 target_include_directories(host PRIVATE src)
-target_compile_options(host PRIVATE -Wall -Wextra)
+target_compile_options(host PRIVATE -Wall -Wextra $<$<CONFIG:Debug>:-g>)
 target_link_libraries(host PRIVATE sokol imgui-docking)
 
 target_include_directories(dive PRIVATE src)
 target_include_directories(dive PRIVATE lib/base)
-target_compile_options(dive PRIVATE -Wall -Wextra -mcpu=apple-m1)
+target_compile_options(dive PRIVATE -Wall -Wextra -mcpu=apple-m1 $<$<CONFIG:Debug>:-g>)
 target_link_libraries(dive PRIVATE imgui-docking sokol noise)

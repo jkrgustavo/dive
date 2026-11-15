@@ -35,17 +35,17 @@ static void mesh_release(struct MeshBuffer *mesh) {
 }
 
 // thread safe
-void chunk_generate(u8 *data, int3 chunk_pos, i32 seed, bool *solid, bool *empty) {
+void chunk_generate(voxel *data, int3 chunk_pos, i32 seed, bool *solid, bool *empty) {
     i32 base_y = chunk_to_voxel(chunk_pos).y;
     if (base_y >= 118) {
         *solid = false;
         *empty = true;
-        memset(data, 0, sizeof(u8) * CHUNK_VOLUME);
+        memset(data, 0, sizeof(voxel) * CHUNK_VOLUME);
         return;
     } else if (base_y + CHUNK_DIM_Y < -25) {
         *solid = true;
         *empty = false;
-        memset(data, GREY, sizeof(u8) * CHUNK_VOLUME);
+        memset(data, GREY, sizeof(voxel) * CHUNK_VOLUME);
         return;
     }
 
@@ -115,20 +115,19 @@ void chunk_generate(u8 *data, int3 chunk_pos, i32 seed, bool *solid, bool *empty
 }
 
 // swap job's and chunk's buffers
-void chunk_apply_terrain(struct Chunk *chunk, struct ChunkJob *cjob) {
-    bs_assert(chunk && cjob);
-    chunk->flags.empty = cjob->empty;
-    chunk->flags.solid = cjob->solid;
+void chunk_apply_terrain(struct Chunk *chunk, voxel **data, bool solid, bool empty) {
+    bs_assert(chunk && data && *data);
+    chunk->flags.empty = empty;
+    chunk->flags.solid = solid;
 
-    if (!chunk->flags.empty) {
-        u8 *tmp = chunk->data;
-        chunk->data = cjob->voxels;
-        cjob->voxels = tmp;
+    if (!chunk->flags.empty && !chunk->flags.buried) {
+        voxel *tmp = chunk->data;
+        chunk->data = *data;
+        *data = tmp;
     } else {
         free(chunk->data);
         chunk->data = NULL;
     }
-
 
     chunk->state = CHUNK_LOADED;
 }
@@ -168,15 +167,7 @@ static inline const struct Chunk *neighbor_at(const struct Chunk *neighbors[27],
     return neighbors[(off.x + 1) + (off.y + 1) * 3 + (off.z + 1) * 9];
 }
 
-static inline u8 sample_data(const struct Chunk *chunk, int3 local_pos) {
-    if (!chunk || chunk->flags.buried) return INVALID;
-
-    if (chunk->flags.empty) return AIR;
-
-    return chunk->data[local_to_chunk_index(local_pos)];
-}
-
-void build_padded_data(u8 *padded, const struct Chunk *neighbors[27]) {
+void build_padded_data(voxel *padded, const struct Chunk *neighbors[27]) {
     // double loop bc padded chunk dim isn't a power of two
     for (i32 z = -1; z < PADDED_CHUNK_DIM_Z-1; z++) {
         for (i32 y = -1; y < PADDED_CHUNK_DIM_Y-1; y++) {
@@ -184,15 +175,15 @@ void build_padded_data(u8 *padded, const struct Chunk *neighbors[27]) {
                 int3 offset = voxel_to_chunk(vox);
                 int3 local  = voxel_to_local(vox);
 
-                u8 *row = padded 
+                voxel *row = padded 
                     + (y+1) * PADDED_CHUNK_DIM_X + (z+1) * PADDED_CHUNK_DIM_X * PADDED_CHUNK_DIM_Y;
                 
                 int3 off_right = offset + dir_offset[RIGHT];
-                row[0] = sample_data(neighbor_at(neighbors, off_right), 
+                row[0] = chunk_sample_data(neighbor_at(neighbors, off_right), 
                             simd_make_int3(CHUNK_DIM.x - 1, local.y, local.z));
 
                 int3 off_left = offset + dir_offset[LEFT];
-                row[PADDED_CHUNK_DIM_X - 1] = sample_data(neighbor_at(neighbors, off_left),
+                row[PADDED_CHUNK_DIM_X - 1] = chunk_sample_data(neighbor_at(neighbors, off_left),
                         simd_make_int3(0, local.y, local.z));
 
                 const struct Chunk *chunk = neighbor_at(neighbors, offset);
@@ -248,10 +239,8 @@ void chunk_mesh(struct MeshScratch *scratch) {
 }
 
 // updates in-flight flags
-void chunk_apply_mesh(struct Chunk *chunk, struct ChunkJob *cjob, bool fresh) {
+void chunk_apply_mesh(struct Chunk *chunk, struct MeshScratch *scratch, bool fresh) {
     mesh_release(&chunk->mesh);
-
-    struct MeshScratch *scratch = &cjob->scratch;
 
     chunk->mesh.vertex_count = scratch->quads.count;
 
@@ -276,7 +265,7 @@ void chunk_apply_mesh(struct Chunk *chunk, struct ChunkJob *cjob, bool fresh) {
 
     chunk->mesh.paddbuf = sg_make_buffer(&(sg_buffer_desc) {
         .usage.storage_buffer = true,
-        .data = { .ptr = scratch->padded_data, .size = PADDED_CHUNK_VOLUME * sizeof(u8) }
+        .data = { .ptr = scratch->padded_data, .size = PADDED_CHUNK_VOLUME * sizeof(voxel) }
     });
     chunk->mesh.paddbuf_view = sg_make_view(&(sg_view_desc) {
         .storage_buffer.buffer = chunk->mesh.paddbuf

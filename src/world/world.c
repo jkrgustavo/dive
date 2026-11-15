@@ -26,27 +26,6 @@ static void chunk_job_release(struct World *world, struct ChunkJob *job) {
     job->in_use = false;
 }
 
-static void build_palette(struct World *world) {
-    u32 palette[256] = {0};
-    palette[RED] = 0xFF0000FF;
-    palette[ORANGE] = 0xFF0099FF;
-    palette[YELLOW] = 0xFF00FFFF;
-    palette[GREEN] = 0xFF33DD33;
-    palette[BLUE] = 0xFFFF0000;
-    palette[PURPLE] = 0xFFFF00FF;
-    palette[GREY] = 0xFFAAAAAA;
-    palette[INVALID] = palette[PURPLE];
-
-    world->palette.palette_buf = sg_make_buffer(&(sg_buffer_desc) {
-        .data = SG_RANGE(palette),
-        .usage.storage_buffer = true
-    });
-    world->palette.palette_view = sg_make_view(&(sg_view_desc) {
-        .storage_buffer.buffer = world->palette.palette_buf
-    });
-}
-
-
 static void chunk_job_run(struct Job *job) {
     struct ChunkJob *cjob = (struct ChunkJob *)job;
     if (cjob->type == JOB_GENERATE) {
@@ -90,7 +69,7 @@ static void load_chunk(struct World *world, struct Chunk *cx, struct ChunkJob *c
     cjob->type = JOB_GENERATE;
     cjob->chunk_pos = chunk_pos;
     cjob->version = cx->version;
-    if (!cjob->voxels) cjob->voxels = malloc(sizeof(u8) * CHUNK_VOLUME);
+    if (!cjob->voxels) cjob->voxels = calloc(1, sizeof(voxel) * CHUNK_VOLUME);
     cjob->seed = world->seed;
     cx->state = CHUNK_LOADING;
     jobs_submit(world->job_system, &cjob->job);
@@ -138,7 +117,7 @@ void world_init(struct World *world, struct JobSystem *job_sys) {
     world->gen_limit.max = floor(JOB_POOL_SIZE / 2.0) + 2;
     world->gen_limit.in_flight = 0;
 
-    build_palette(world);
+    world->palette = palette_build();
     build_offsets(world);
     world_recenter(world);
 }
@@ -208,11 +187,11 @@ static void world_apply_finished_jobs(struct World *world) {
         bool fresh = same && chunk->version == cjob->version;
 
         if (cjob->type == JOB_MESH && same && chunk->state == CHUNK_MESHING) {
-            chunk_apply_mesh(chunk, cjob, fresh);
+            chunk_apply_mesh(chunk, &cjob->scratch, fresh);
             if (!fresh) chunk->flags.dirty = true;
         }
         if (fresh && cjob->type == JOB_GENERATE && chunk->state == CHUNK_LOADING) {
-            chunk_apply_terrain(chunk, cjob);
+            chunk_apply_terrain(chunk, &cjob->voxels, cjob->solid, cjob->empty);
             // mark any neighbor chunks in a 3x3x3 grid that are meshed as dirty
             for (u32 i = 0; i < 27; i++) {
                 if (i == 13) continue;
@@ -245,15 +224,14 @@ void world_render(struct World *world, double3 camera_pos) {
         if (cx == NULL) { continue; }
 
         if (cx->state == CHUNK_READY || cx->state == CHUNK_MESHING)
-            chunk_render(cx, world->palette.palette_view, camera_pos);
+            chunk_render(cx, world->palette.view, camera_pos);
     }
 }
 
 void world_reload(struct World *world) {
-    sg_destroy_view(world->palette.palette_view);
-    sg_destroy_buffer(world->palette.palette_buf);
+    palette_destroy(&world->palette);
 
-    build_palette(world);
+    world->palette = palette_build();
 }
 
 void world_destroy(struct World *world) {
@@ -263,8 +241,7 @@ void world_destroy(struct World *world) {
         free(world->chunks[c]);
         world->chunks[c] = NULL;
     }
-    sg_destroy_view(world->palette.palette_view);
-    sg_destroy_buffer(world->palette.palette_buf);
+    palette_destroy(&world->palette);
     free(world->chunks);
     free(world->offsets);
     for (u32 i = 0; i < JOB_POOL_SIZE; i++) {

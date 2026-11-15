@@ -2,7 +2,8 @@
 #define CHUNK_H
 
 #include "utils/util.h"
-#include "utils/jobs.h"
+
+#include "voxel.h"
 
 /* Types of coordinates:
  *  | World - double3 - unbounded
@@ -29,7 +30,6 @@
  * lives in the MeshBuffer.
  */
 
-#define VOXEL_SIZE 0.1
 
 #define CHUNK_DIM_X 64
 #define CHUNK_DIM_Y 64
@@ -67,11 +67,6 @@ static inline int3 chunk_index_to_local(const u32 idx) {
     );
 }
 
-// convert continuous world coords to voxels
-static inline int3 world_to_voxel(const double3 coord) { return simd_int_sat(floor(coord / VOXEL_SIZE)); }
-
-// convert voxels to world coords
-static inline double3 voxel_to_world(const int3 world_vox_pos) { return simd_double(world_vox_pos) * VOXEL_SIZE; }
 
 
 // takes a local voxel pos and checks 
@@ -85,35 +80,7 @@ static inline bool voxel_in_chunk(const int3 local_pos) {
 
 #define PADDED_CHUNK_VOLUME ((PADDED_CHUNK_DIM_X) * (PADDED_CHUNK_DIM_Y) * (PADDED_CHUNK_DIM_Z))
 
-enum Direction {
-    FRONT = 0,  // +z
-    BACK,       // -z
-    LEFT,       // +x
-    RIGHT,      // -x
-    UP,         // +y
-    DOWN        // -y
-};
 
-static const int3 dir_offset[] = {
-    {  0,  0,  1 }, // front +z
-    {  0,  0, -1 }, // back  -z
-    {  1,  0,  0 }, // left  +x
-    { -1,  0,  0 }, // right -x
-    {  0,  1,  0 }, // up    +y
-    {  0, -1,  0 }, // down  -y
-};
-
-enum VoxelColor {
-    AIR = 0,
-    RED,
-    ORANGE,
-    YELLOW,
-    GREEN,
-    BLUE,
-    PURPLE,
-    GREY,
-    INVALID = 255
-};
 
 enum ChunkState {
     CHUNK_UNLOADED,
@@ -138,7 +105,7 @@ struct MeshScratch {
     bool solid: 1;
 
     // padded chunk data to be sent to the GPU
-    u8 padded_data[PADDED_CHUNK_DIM_X * PADDED_CHUNK_DIM_Y * PADDED_CHUNK_DIM_Z];
+    voxel padded_data[PADDED_CHUNK_DIM_X * PADDED_CHUNK_DIM_Y * PADDED_CHUNK_DIM_Z];
 };
 
 struct MeshBuffer {
@@ -151,28 +118,6 @@ struct MeshBuffer {
     sg_buffer paddbuf;
 };
 
-struct ChunkJob {
-    // intrusive, jobsys only sees this
-    struct Job job;
-
-    enum ChunkJobType type;
-    int3 chunk_pos;
-    i32 seed;
-
-    // in case a job finishes too late
-    u32 version;
-
-    // world gen output buffer
-    u8 *voxels;
-
-    struct MeshScratch scratch;
-    bool empty;
-    bool solid;
-
-    // for main thread only. don't assign the same job to multiple workers
-    bool in_use;
-};
-
 struct Chunk {
     // world position in chunks
     int3 position;
@@ -182,7 +127,7 @@ struct Chunk {
 
     // array of voxel data for this chunk.
     // data is an index into a color palette [0, 255]
-    u8 *data;
+    voxel *data;
 
     struct MeshBuffer mesh;
 
@@ -198,19 +143,26 @@ struct Chunk {
 
 };
 
+static inline voxel chunk_sample_data(const struct Chunk *chunk, const int3 local_pos) {
+    if (!chunk) return INVALID;
+    else if (chunk->flags.empty) return AIR;
+    else if (chunk->flags.buried) return GREY;
+    else return chunk->data[local_to_chunk_index(local_pos)];
+}
+
 void chunk_set_block(struct Chunk *chunk, int3 local_pos, enum VoxelColor id);
 
 void chunk_init(struct Chunk *chunk, int3 chunk_pos);
 void chunk_reset(struct Chunk *chunk);
 void chunk_destroy(struct Chunk *chunk);
 
-void chunk_generate(u8 *data, int3 chunk_pos, i32 seed, bool *solid, bool *empty);
-void chunk_apply_terrain(struct Chunk *chunk, struct ChunkJob *cjob);
+void chunk_generate(voxel *data, int3 chunk_pos, i32 seed, bool *solid, bool *empty);
+void chunk_apply_terrain(struct Chunk *chunk, voxel **data, bool solid, bool empty);
 
-void build_padded_data(u8 *padded, const struct Chunk *neighbors[27]);
+void build_padded_data(voxel *padded, const struct Chunk *neighbors[27]);
 bool chunk_prepare_mesh(struct Chunk *chunk, const struct Chunk *neighbors[27], struct MeshScratch *scratch);
 void chunk_mesh(struct MeshScratch *scratch);
-void chunk_apply_mesh(struct Chunk *chunk, struct ChunkJob *cjob, bool fresh);
+void chunk_apply_mesh(struct Chunk *chunk, struct MeshScratch *scratch, bool fresh);
 void chunk_set_buried(struct Chunk *chunk);
 
 void chunk_render(const struct Chunk *chunk, sg_view palette, double3 cam_pos);

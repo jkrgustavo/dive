@@ -2,6 +2,7 @@
 #define WORLD_H
 
 #include "utils/util.h"
+#include "utils/jobs.h"
 #include "chunk.h"
 /* Types of coordinates:
  *  | World  - double3 - unbounded  - in meters
@@ -57,7 +58,27 @@ static inline bool offset_in_view(const int3 offset) {
     return xz_len <= xz_rad2 && abs(offset.y) <= WORLD_VIEW_RAD.y;
 }
 
+struct ChunkJob {
+    // intrusive, jobsys only sees this
+    struct Job job;
 
+    enum ChunkJobType type;
+    int3 chunk_pos;
+    i32 seed;
+
+    // in case a job finishes too late
+    u32 version;
+
+    // world gen output buffer
+    voxel *voxels;
+
+    struct MeshScratch scratch;
+    bool empty;
+    bool solid;
+
+    // for main thread only. don't assign the same job to multiple workers
+    bool in_use;
+};
 
 struct World {
     i32 seed;
@@ -89,11 +110,8 @@ struct World {
         u32 in_flight, max;
     } gen_limit;
 
-    // Color palette
-    struct {
-        sg_buffer palette_buf;
-        sg_view palette_view;
-    } palette;
+    // Color palette sg_buffer & view
+    struct Palette palette;
 
     // array of chunks that are currently loaded
     struct Chunk **chunks;
@@ -114,11 +132,15 @@ static inline struct Chunk *world_get_chunk(const struct World *world, const int
     }     
 }
 
-// checks if there's a solid voxel at the specified voxel position
-static inline bool world_solid_at(const struct World *world, const int3 vox_pos) {
+// TODO: Redo once materials are implemented
+// returns the voxel data at the specified voxel position
+static inline voxel world_sample_data(const struct World *world, const int3 vox_pos) {
     struct Chunk *c = world_get_chunk(world, voxel_to_chunk(vox_pos));
-    if (c == NULL || c->flags.empty) return false;
-    return (c->data[local_to_chunk_index(voxel_to_local(vox_pos))] != AIR);
+    return chunk_sample_data(c, voxel_to_local(vox_pos));
+}
+
+static inline bool world_solid_at(const struct World *world, const int3 vox_pos) {
+    return world_sample_data(world, vox_pos) != AIR;
 }
 
 void world_init(struct World *world, struct JobSystem *job_sys);

@@ -17,7 +17,7 @@ bool renderer_init(struct Renderer *renderer) {
     assert(vs_buffer);
     char *fs_buffer = read_file("src/shaders/frag.metal");
     assert(fs_buffer);
-    renderer->shader = sg_make_shader(&(sg_shader_desc){
+    sg_shader shader = sg_make_shader(&(sg_shader_desc){
         .label = "Voxel",
         .vertex_func.source = vs_buffer,
         .fragment_func.source = fs_buffer,
@@ -48,7 +48,7 @@ bool renderer_init(struct Renderer *renderer) {
         }
     });
 
-    renderer->pipeline = sg_make_pipeline(&(sg_pipeline_desc){
+    sg_pipeline pipeline = sg_make_pipeline(&(sg_pipeline_desc){
         .label = "Voxel",
         .shader = renderer->shader,
         .index_type = SG_INDEXTYPE_NONE,
@@ -62,10 +62,17 @@ bool renderer_init(struct Renderer *renderer) {
     free(vs_buffer);
     free(fs_buffer);
 
-    bool shader_valid = sg_query_shader_state(renderer->shader) == SG_RESOURCESTATE_VALID;
-    bool pipe_valid = sg_query_pipeline_state(renderer->pipeline) == SG_RESOURCESTATE_VALID;
+    bool shader_valid = sg_query_shader_state(shader) == SG_RESOURCESTATE_VALID;
+    bool pipe_valid = sg_query_pipeline_state(pipeline) == SG_RESOURCESTATE_VALID;
 
-    if (!shader_valid || !pipe_valid) return false;
+    if (!shader_valid || !pipe_valid) {
+        sg_destroy_shader(shader);
+        sg_destroy_pipeline(pipeline);
+        return false;
+    }
+
+    renderer->shader = shader;
+    renderer->pipeline = pipeline;
 
     return true;
 }

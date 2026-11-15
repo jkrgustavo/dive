@@ -1,0 +1,57 @@
+#ifndef VOXEL_H
+#define VOXEL_H
+
+#include "utils/util.h"
+
+#define VOXEL_SIZE 0.1
+
+typedef u8 voxel;
+
+// convert continuous world coords to voxels
+static inline int3 world_to_voxel(const double3 coord) { return simd_int_sat(floor(coord / VOXEL_SIZE)); }
+
+// convert voxels to world coords
+static inline double3 voxel_to_world(const int3 world_vox_pos) { return simd_double(world_vox_pos) * VOXEL_SIZE; }
+
+
+enum Direction {
+    FRONT = 0,  // +z
+    BACK,       // -z
+    LEFT,       // +x
+    RIGHT,      // -x
+    UP,         // +y
+    DOWN        // -y
+};
+
+static const int3 dir_offset[] = {
+    {  0,  0,  1 }, // front +z
+    {  0,  0, -1 }, // back  -z
+    {  1,  0,  0 }, // left  +x
+    { -1,  0,  0 }, // right -x
+    {  0,  1,  0 }, // up    +y
+    {  0, -1,  0 }, // down  -y
+};
+
+enum VoxelColor {
+    AIR = 0,
+    RED,
+    ORANGE,
+    YELLOW,
+    GREEN,
+    BLUE,
+    PURPLE,
+    GREY,
+    INVALID = 255
+};
+
+struct Palette {
+    sg_buffer buf;
+    sg_view view;
+};
+
+struct Palette palette_build();
+void palette_destroy(struct Palette *palette);
+
+
+
+#endif  /* VOXEL_H */
