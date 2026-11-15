@@ -50,7 +50,7 @@ bool renderer_init(struct Renderer *renderer) {
 
     sg_pipeline pipeline = sg_make_pipeline(&(sg_pipeline_desc){
         .label = "Voxel",
-        .shader = renderer->shader,
+        .shader = shader,
         .index_type = SG_INDEXTYPE_NONE,
         .depth = { 
             .compare = SG_COMPAREFUNC_GREATER_EQUAL, 
