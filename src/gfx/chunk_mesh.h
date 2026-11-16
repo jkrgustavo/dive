@@ -5,7 +5,8 @@
 #include "world/voxel.h"
 
 struct MeshBuffer {
-    u32 quad_count;
+    u32 trans_count;
+    u32 opaque_count;
 
     sg_view quad_view;
     sg_buffer quads;
@@ -19,7 +20,10 @@ struct ChunkDraw {
     float3 rel_pos;
 };
 
-struct MeshBuffer renderer_mesh_create(const u64 *quads, u32 quad_count, const voxel *padded, size_t padded_count);
+struct MeshBuffer renderer_mesh_create(
+        const u64 *quads, u32 opaque_count, u32 trans_count, 
+        const voxel *padded, size_t padded_count);
+
 void renderer_mesh_destroy(struct MeshBuffer *mesh);
 
 #endif /* CHUNK_MESH_H */

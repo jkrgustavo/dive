@@ -1,12 +1,16 @@
 #include "chunk_mesh.h"
 
-struct MeshBuffer renderer_mesh_create(const u64 *quads, u32 quad_count, const voxel *padded, size_t padded_count) {
-    struct MeshBuffer out = {0};
-    out.quad_count = quad_count;
+struct MeshBuffer renderer_mesh_create(
+        const u64 *quads, u32 opaque_count, u32 trans_count, 
+        const voxel *padded,     size_t padded_count
+) {
+    struct MeshBuffer out = { .trans_count = trans_count, .opaque_count = opaque_count };
+
     out.quads = sg_make_buffer(&(sg_buffer_desc) {
         .usage.storage_buffer = true,
-        .data = { .ptr = quads, .size = out.quad_count * sizeof(u64) }
+        .data = { .ptr = quads, .size = (out.opaque_count + out.trans_count) * sizeof(u64) }
     });
+
     out.quad_view = sg_make_view(&(sg_view_desc) {
         .storage_buffer.buffer = out.quads,
     });
@@ -28,7 +32,8 @@ void renderer_mesh_destroy(struct MeshBuffer *mesh) {
 
     sg_destroy_view(mesh->padded_view);
     sg_destroy_buffer(mesh->padded);
-    mesh->quad_count = 0;
+    mesh->trans_count = 0;
+    mesh->opaque_count = 0;
 
     *mesh = (struct MeshBuffer){0};
 }

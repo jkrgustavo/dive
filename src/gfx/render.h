@@ -7,7 +7,8 @@
 struct Renderer {
     sg_pass_action pass_action;
     sg_shader shader;
-    sg_pipeline pipeline;
+    sg_pipeline pipeline_opaque;
+    sg_pipeline pipeline_trans;
 
     // contains handles to all needed buffers
     sg_bindings bindings;

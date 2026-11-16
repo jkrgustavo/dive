@@ -41,6 +41,7 @@ enum VoxelColor {
     BLUE,
     PURPLE,
     GREY,
+    WATER,
     INVALID = 255
 };
 

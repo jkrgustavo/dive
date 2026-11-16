@@ -63,6 +63,8 @@ void chunk_generate(voxel *data, int3 chunk_pos, i32 seed, bool *solid, bool *em
 
     i32 height_map[CHUNK_DIM_X * CHUNK_DIM_Z];
 
+    i32 waterline = 5;
+
     for (u32 z = 0; z < CHUNK_DIM_Z; z++) {
         for (u32 x = 0; x < CHUNK_DIM_X; x++) {
             int3 pos_w = local_to_voxel(simd_make_int3(x, 0, z), chunk_pos);
@@ -91,6 +93,10 @@ void chunk_generate(voxel *data, int3 chunk_pos, i32 seed, bool *solid, bool *em
                     *empty = false;
                 } else if (pos_w.y < ground_height) {
                     data[idx] = GREY;
+                    *empty = false;
+                } else if (pos_w.y < waterline) {
+                    data[idx] = WATER;
+                    *solid = false;
                     *empty = false;
                 } else {
                     data[idx] = AIR;
@@ -197,7 +203,8 @@ bool chunk_prepare_mesh(struct Chunk *chunk, const struct Chunk *neighbors[27], 
 
     chunk->state = CHUNK_MESHING;
     build_padded_data(scratch->padded_data, neighbors);
-    bs_buffer_clear(&scratch->quads);
+    bs_buffer_clear(&scratch->quads_opaque);
+    bs_buffer_clear(&scratch->quads_trans);
     chunk->flags.dirty = false;
 
     return true;
@@ -206,6 +213,7 @@ bool chunk_prepare_mesh(struct Chunk *chunk, const struct Chunk *neighbors[27], 
 // Thread safe
 void chunk_mesh(struct MeshScratch *scratch) {
     scratch->solid = true;
+    scratch->empty = true;
     for (size_t vox = 0; vox < CHUNK_VOLUME; vox++) {
         int3 local_pos = chunk_index_to_local(vox);
         i32 vox_padded_idx = 
@@ -213,40 +221,56 @@ void chunk_mesh(struct MeshScratch *scratch) {
             + (local_pos.y+1) * PADDED_CHUNK_DIM_X 
             + (local_pos.z+1) * PADDED_CHUNK_DIM_X * PADDED_CHUNK_DIM_Y;
 
-        if (!(materials[scratch->padded_data[vox_padded_idx]].flags & MAT_OPAQUE)) 
+        voxel vx = scratch->padded_data[vox_padded_idx];
+        if (!(materials[vx].flags & MAT_OPAQUE)) 
             scratch->solid = false;
 
-        if (scratch->padded_data[vox_padded_idx] == AIR) 
+        if (vx == AIR) 
             continue;
 
+        struct QuadBuf *buf = (materials[vx].flags & MAT_OPAQUE) 
+            ? &scratch->quads_opaque 
+            : &scratch->quads_trans;
+
+        scratch->empty = false;
         for (u32 dir = 0; dir < 6; dir++) {
-            if ((materials[scratch->padded_data[vox_padded_idx + padded_stride[dir]]].flags & MAT_OPAQUE))
+            voxel vn = scratch->padded_data[vox_padded_idx + padded_stride[dir]];
+            if ((materials[vn].flags & MAT_OPAQUE) || vx == vn)
                 continue;
 
             u64 quad = pack_quad(local_pos + face_vertex_mask[dir], 1, 1, dir);
-            bs_buffer_append(&scratch->quads, quad);
+            bs_buffer_append(buf, quad);
         }
     }
+    scratch->opaque_count = scratch->quads_opaque.count;
+    bs_buffer_append_multi(&scratch->quads_opaque, scratch->quads_trans.items, scratch->quads_trans.count);
 }
 
 // updates in-flight flags
 void chunk_apply_mesh(struct Chunk *chunk, struct MeshScratch *scratch, bool fresh) {
     renderer_mesh_destroy(&chunk->mesh);
 
-    if (scratch->quads.count == 0 && fresh) {
-        // TODO: this counts transparent blocks as empty. Don't set empty based off of solid
-        chunk->flags.solid = scratch->solid;
-        chunk->flags.empty = !scratch->solid;
-        if (chunk->flags.empty) {
-            free(chunk->data);
-            chunk->data = NULL;
+    // TODO: Finish the translucent part
+    if (scratch->quads_opaque.count == 0) {
+        if (fresh) {
+            chunk->flags.solid = scratch->solid;
+            chunk->flags.empty = scratch->empty;
+            if (chunk->flags.empty) {
+                free(chunk->data);
+                chunk->data = NULL;
+            }
         }
         chunk->state = CHUNK_READY;
         return;
     }
 
     chunk->mesh = renderer_mesh_create(
-            scratch->quads.items, scratch->quads.count, scratch->padded_data, PADDED_CHUNK_VOLUME);
+        scratch->quads_opaque.items, 
+        scratch->opaque_count, 
+        scratch->quads_trans.count, 
+        scratch->padded_data,
+        PADDED_CHUNK_VOLUME
+    );
 
     chunk->state = CHUNK_READY;
 }
@@ -261,7 +285,7 @@ void chunk_set_buried(struct Chunk *chunk) {
 }
 
 void chunk_reset(struct Chunk *chunk) {
-    assert(chunk);
+    bs_assert(chunk, "Can't reset a NULL chunk");
     if (!chunk->flags.empty && !chunk->flags.buried) {
         renderer_mesh_destroy(&chunk->mesh);
     }
@@ -277,7 +301,7 @@ void chunk_reset(struct Chunk *chunk) {
 }
 
 void chunk_destroy(struct Chunk *chunk) {
-    assert(chunk);
+    bs_assert(chunk, "Can't destroy a NULL chunk");
     if (!chunk->flags.empty) {
         renderer_mesh_destroy(&chunk->mesh);
         free(chunk->data);

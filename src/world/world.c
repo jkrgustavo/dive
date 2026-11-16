@@ -223,7 +223,7 @@ u32 world_collect_draws(struct World *world, double3 camera_pos, struct ChunkDra
     for (u32 i = 0; i < world->offset_count && count < max; i++) {
         struct Chunk *cx = world_get_chunk(world, world->center + world->offsets[i]);
 
-        if (!cx || cx->state < CHUNK_MESHING || cx->mesh.quad_count == 0) continue;
+        if (!cx || cx->state < CHUNK_MESHING || (cx->mesh.trans_count == 0 && cx->mesh.opaque_count == 0) ) continue;
 
         double3 chunk_pos = voxel_to_world(chunk_to_voxel(cx->position));
         float3 rel_pos = simd_float(chunk_pos - camera_pos);
@@ -247,7 +247,8 @@ void world_destroy(struct World *world) {
     free(world->offsets);
     for (u32 i = 0; i < JOB_POOL_SIZE; i++) {
         struct ChunkJob *cjob = &world->job_pool[i];
-        bs_buffer_free(&cjob->scratch.quads);
+        bs_buffer_free(&cjob->scratch.quads_trans);
+        bs_buffer_free(&cjob->scratch.quads_opaque);
         if (cjob->voxels)
             free(cjob->voxels);
     }

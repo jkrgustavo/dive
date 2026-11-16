@@ -11,11 +11,12 @@ const struct Material materials[256] = {
     [BLUE]      = MAT(0xFFFF0000, MAT_COLLIDES),
     [PURPLE]    = MAT(0xFFFF00FF, MAT_COLLIDES),
     [GREY]      = MAT(0xFFAAAAAA, MAT_COLLIDES),
+    [WATER]     = MAT(0xAAFF6644, MAT_LIQUID),
     [INVALID]   = MAT(0xFFFF00FF, MAT_COLLIDES),
 };
 
 void palette_colors(u32 out[256]) {
-    for (u32 i = 1; i < 256; i++) {
+    for (u32 i = 0; i < 256; i++) {
         struct Material mat = materials[i];
         out[i] = mat.color;
     }

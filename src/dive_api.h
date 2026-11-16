@@ -1,7 +1,7 @@
 #ifndef DIVE_API_H
 #define DIVE_API_H
 
-#define DIVE_API_VERSION 2
+#define DIVE_API_VERSION 3
 
 #include <sokol_app.h>
 

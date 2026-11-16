@@ -93,13 +93,15 @@ enum ChunkJobType {
 };
 
 struct MeshScratch {
-    // scratch bs_buffer for quad generation
+    // scratch bs_buffer for opaque and translucent quads
     struct QuadBuf {
         u64 *items;
         size_t count, capacity;
-    } quads;
+    } quads_opaque, quads_trans;
+    u32 opaque_count;
 
     bool solid: 1;
+    bool empty: 1;
 
     // padded chunk data to be sent to the GPU
     voxel padded_data[PADDED_CHUNK_DIM_X * PADDED_CHUNK_DIM_Y * PADDED_CHUNK_DIM_Z];

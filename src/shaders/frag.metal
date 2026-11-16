@@ -9,7 +9,7 @@ struct vs_in {
 
 bool is_solid(device const uint8_t *padded, device const uint *palette, int3 vox_pos) {
     vox_pos += 1;
-    return (palette[padded[vox_pos.x + vox_pos.y*66 + vox_pos.z*66*66]] >> 24) == 0xFF;
+    return (palette[padded[vox_pos.x + vox_pos.y*66 + vox_pos.z*66*66]] >> 24) == 0xFFu;
 }
 
 float corner_ao(device const uint8_t *padded, device const uint *palette, int3 a, int3 t1, int3 t2, int d1, int d2) {
